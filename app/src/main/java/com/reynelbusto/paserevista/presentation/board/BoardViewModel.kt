@@ -7,10 +7,12 @@ import com.reynelbusto.paserevista.di.AppContainer
 import com.reynelbusto.paserevista.domain.model.BoardColumn
 import com.reynelbusto.paserevista.domain.usecase.BoardItem
 import com.reynelbusto.paserevista.domain.usecase.BoardUseCase
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.launch
 
 data class BoardUiState(
@@ -38,6 +40,17 @@ class BoardViewModel(private val board: BoardUseCase) : ViewModel() {
                     // (dato corrupto, mapeo), se omite sin tumbar la pizarra.
                     procedures.mapNotNull { proc ->
                         runCatching { board.enrich(proc) }.getOrNull()
+                    }
+                }
+                // Si la observación falla (p. ej. error transitorio de BD),
+                // se reintenta unas veces antes de rendirse: antes, el primer
+                // error mataba el Flow y la pizarra quedaba congelada.
+                .retryWhen { _, attempt ->
+                    if (attempt < 3) {
+                        delay(2000)
+                        true
+                    } else {
+                        false
                     }
                 }
                 .catch { _uiState.value = BoardUiState(isLoading = false, error = "No se pudo cargar la pizarra.") }

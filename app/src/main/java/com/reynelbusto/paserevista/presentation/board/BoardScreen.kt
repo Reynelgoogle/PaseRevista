@@ -111,18 +111,21 @@ private fun BoardContent(
                     items = state.proposed,
                     onMove = onMove,
                     modifier = Modifier.weight(1f),
+                    scrollable = true,
                 )
                 BoardColumnView(
                     column = BoardColumn.SCHEDULED,
                     items = state.scheduled,
                     onMove = onMove,
                     modifier = Modifier.weight(1f),
+                    scrollable = true,
                 )
                 BoardColumnView(
                     column = BoardColumn.DONE,
                     items = state.done,
                     onMove = onMove,
                     modifier = Modifier.weight(1f),
+                    scrollable = true,
                 )
             }
         } else {
@@ -139,6 +142,7 @@ private fun BoardContent(
                         items = state.proposed,
                         onMove = onMove,
                         modifier = Modifier.fillMaxWidth(),
+                        scrollable = false,
                     )
                 }
                 item {
@@ -147,6 +151,7 @@ private fun BoardContent(
                         items = state.scheduled,
                         onMove = onMove,
                         modifier = Modifier.fillMaxWidth(),
+                        scrollable = false,
                     )
                 }
                 item {
@@ -190,6 +195,13 @@ private fun BoardColumnView(
     items: List<BoardItem>,
     onMove: (String, BoardColumn) -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * true: la columna tiene altura acotada (tablet) y puede desplazar su
+     * propia lista. false: vive dentro de un LazyColumn padre (teléfono);
+     * un LazyColumn anidado recibiría altura infinita y tumba la app
+     * (IllegalStateException al medir), así que se lista con Column.
+     */
+    scrollable: Boolean,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
@@ -198,8 +210,8 @@ private fun BoardColumnView(
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.primary,
         )
-        if (column == BoardColumn.DONE) {
-            // En tablet la columna Realizado también lista directo.
+        if (!scrollable || column == BoardColumn.DONE) {
+            // Sin desplazamiento propio: lista directa.
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items.forEach { item ->
                     ProcedureCard(item = item, onMove = onMove, modifier = Modifier.fillMaxWidth())
