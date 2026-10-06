@@ -2,11 +2,15 @@ package com.reynelbusto.paserevista.di
 
 import android.content.Context
 import androidx.room.Room
+import com.reynelbusto.paserevista.BuildConfig
 import com.reynelbusto.paserevista.core.Clock
 import com.reynelbusto.paserevista.core.SystemClock
+import com.reynelbusto.paserevista.data.backup.BackupManager
+import com.reynelbusto.paserevista.data.local.DATABASE_NAME
 import com.reynelbusto.paserevista.data.local.DatabaseUnitOfWork
 import com.reynelbusto.paserevista.data.local.MIGRATION_1_2
 import com.reynelbusto.paserevista.data.local.PaseRevistaDatabase
+import com.reynelbusto.paserevista.data.local.SCHEMA_VERSION
 import com.reynelbusto.paserevista.data.repository.CaseCardRepositoryImpl
 import com.reynelbusto.paserevista.data.repository.CaseHistoryRepositoryImpl
 import com.reynelbusto.paserevista.data.repository.CustomFieldRepositoryImpl
@@ -63,8 +67,17 @@ class AppContainer(context: Context) {
         Room.databaseBuilder(
             appContext,
             PaseRevistaDatabase::class.java,
-            "paserevista.db",
+            DATABASE_NAME,
         ).addMigrations(MIGRATION_1_2).build()
+
+    /**
+     * Cierra Room para poder reemplazar el archivo .db (restaurar respaldo).
+     * La UI debe reiniciar la app después: los repositorios en memoria
+     * apuntan a la base anterior.
+     */
+    fun closeDatabase() {
+        database.close()
+    }
 
     // Repositorios
     val patientRepository: PatientRepository =
@@ -121,6 +134,22 @@ class AppContainer(context: Context) {
     val devices = DeviceUseCase(deviceRepository, clock)
     val results = ResultUseCase(resultRepository, clock)
     val procedures = ProcedureUseCase(unitOfWork, procedureRepository, pendingRepository, clock)
+
+    // Respaldo local de la base de datos (Documents/EntregaGuardia/).
+    val backupManager = BackupManager(
+        appContext = context.applicationContext,
+        clock = clock,
+        databaseFile = { context.applicationContext.getDatabasePath(DATABASE_NAME) },
+        checkpointWal = {
+            database.openHelper.writableDatabase
+                .query("PRAGMA wal_checkpoint(TRUNCATE)").close()
+        },
+        closeDatabase = { closeDatabase() },
+        schemaVersion = SCHEMA_VERSION,
+        countCards = { caseCardRepository.countAll() },
+        countBeds = { caseCardRepository.countDistinctBeds() },
+        appVersion = BuildConfig.VERSION_NAME,
+    )
 
     // Solo-debug: datos de prueba claramente marcados.
     val debugSeed = DebugSeed(

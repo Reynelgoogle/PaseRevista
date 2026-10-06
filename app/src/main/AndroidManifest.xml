@@ -4,6 +4,11 @@
 
     <!-- PaseRevista es 100% offline: sin permiso de INTERNET en v1. -->
 
+    <!-- Respaldo local: en Android < 10 la carpeta pública necesita este permiso. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
     <application
         android:name=".PaseRevistaApp"
         android:allowBackup="false"
@@ -46,5 +51,16 @@
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true"
             android:noHistory="true" />
+
+        <!-- Respaldo local: compartir el .db en Android < 10 (FileProvider). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

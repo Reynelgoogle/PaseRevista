@@ -382,6 +382,13 @@ interface CaseCardDao {
     /** Última tarjeta del paciente (para nombre de cama en la pizarra). */
     @Query("SELECT * FROM case_card WHERE patient_id = :patientId ORDER BY created_at DESC LIMIT 1")
     suspend fun findLatestByPatient(patientId: String): CaseCardEntity?
+
+    /** Conteos para el sidecar del respaldo. */
+    @Query("SELECT COUNT(*) FROM case_card")
+    suspend fun countAll(): Int
+
+    @Query("SELECT COUNT(DISTINCT bed) FROM case_card")
+    suspend fun countDistinctBeds(): Int
 }
 
 @Dao

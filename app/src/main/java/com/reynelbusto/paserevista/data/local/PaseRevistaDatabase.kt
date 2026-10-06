@@ -37,6 +37,8 @@ import com.reynelbusto.paserevista.data.local.entity.TreatmentEventEntity
  * (REGLA DE ORO: nada obligatorio) + columna `address`; nuevas tablas
  * `case_card`, `custom_field`, `case_history`.
  */
+const val DATABASE_NAME = "paserevista.db"
+const val SCHEMA_VERSION = 2
 @Database(
     entities = [
         PatientEntity::class,
@@ -53,7 +55,7 @@ import com.reynelbusto.paserevista.data.local.entity.TreatmentEventEntity
         CustomFieldEntity::class,
         CaseHistoryEntity::class,
     ],
-    version = 2,
+    version = SCHEMA_VERSION,
     exportSchema = true,
 )
 abstract class PaseRevistaDatabase : RoomDatabase() {

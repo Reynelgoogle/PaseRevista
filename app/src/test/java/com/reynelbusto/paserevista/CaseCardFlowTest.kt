@@ -106,6 +106,11 @@ private class FakeCards : CaseCardRepository {
     override suspend fun update(card: CaseCard) {
         store[card.id] = card
     }
+
+    override suspend fun countAll(): Int = store.size
+
+    override suspend fun countDistinctBeds(): Int =
+        store.values.map { it.bed }.distinct().size
 }
 
 private class FakeHistory : CaseHistoryRepository {

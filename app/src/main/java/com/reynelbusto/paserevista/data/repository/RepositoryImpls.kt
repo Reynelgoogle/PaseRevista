@@ -344,6 +344,14 @@ class CaseCardRepositoryImpl(
     override suspend fun update(card: CaseCard) = withContext(Dispatchers.IO) {
         dao.update(card.copy(updatedAt = clock.nowMillis()).toEntity())
     }
+
+    override suspend fun countAll(): Int = withContext(Dispatchers.IO) {
+        dao.countAll()
+    }
+
+    override suspend fun countDistinctBeds(): Int = withContext(Dispatchers.IO) {
+        dao.countDistinctBeds()
+    }
 }
 
 class CustomFieldRepositoryImpl(

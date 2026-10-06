@@ -99,6 +99,9 @@ interface CaseCardRepository {
     suspend fun findLatestByPatient(patientId: String): CaseCard?
     suspend fun create(card: CaseCard): String
     suspend fun update(card: CaseCard)
+    /** Conteos para el sidecar del respaldo. */
+    suspend fun countAll(): Int
+    suspend fun countDistinctBeds(): Int
 }
 
 /** Apartados personalizados de la tarjeta. */
