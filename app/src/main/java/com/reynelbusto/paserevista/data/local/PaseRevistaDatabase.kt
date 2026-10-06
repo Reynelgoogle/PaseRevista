@@ -75,12 +75,44 @@ abstract class PaseRevistaDatabase : RoomDatabase() {
 
 /**
  * Migración 1 → 2 (pivot entrega de guardia).
- * - `patient`: rebuild para nullabilidad + `address`.
+ * - `patient`: nullabilidad en datos personales + columna `address`.
  * - Tablas nuevas: case_card, custom_field, case_history.
+ *
+ * NOTAS DE SEGURIDAD (verificadas empíricamente sobre SQLite real):
+ * 1. `DROP TABLE patient` con hijos existentes ROMPE el commit aunque se use
+ *    `PRAGMA defer_foreign_keys=ON` (SQLite pierde la pista de la tabla padre).
+ *    Por eso se respaldan y vacían TODOS los hijos antes del DROP.
+ * 2. `defer_foreign_keys` difiere los RESTRICT pero NO las acciones CASCADE:
+ *    vaciar `treatment` borraría `treatment_event` de inmediato. Todo hijo se
+ *    respalda ANTES de cualquier DELETE.
+ * 3. `PRAGMA foreign_keys=OFF` no es opción: es no-op dentro de la
+ *    transacción de Room.
  */
 val MIGRATION_1_2: Migration = object : Migration(1, 2) {
     override fun migrate(db: SupportSQLiteDatabase) {
-        // 1) Rebuild de patient con columnas nullables + address.
+        // 0) Diferir los RESTRICT al         // 0) Red de seguridad: diferir verificaciones RESTRICT al commit.
+        db.execSQL("PRAGMA defer_foreign_keys=ON")
+
+        // 1) Respaldar TODOS los hijos de patient (CTAS: solo datos, sin FKs).
+        //    treatment_event ANTES que treatment (su CASCADE es inmediato).
+        val children = listOf(
+            "patient_comorbidity",
+            "daily_record",
+            "pending",
+            "treatment_event",
+            "treatment",
+            "device",
+            "clinical_result",
+            "procedure",
+        )
+        children.forEachIndexed { i, table ->
+            db.execSQL("CREATE TABLE _m12_bak$i AS SELECT * FROM $table")
+        }
+
+        // 2) Vaciar hijos. Sin hijos, el DROP de patient es limpio.
+        children.forEach { table -> db.execSQL("DELETE FROM $table") }
+
+        // 3) Rebuild de patient con esquema v2 (columnas nullables + address).
         db.execSQL(
             """CREATE TABLE patient_new (
                 id TEXT NOT NULL PRIMARY KEY,
@@ -118,15 +150,35 @@ val MIGRATION_1_2: Migration = object : Migration(1, 2) {
         )
         db.execSQL("DROP TABLE patient")
         db.execSQL("ALTER TABLE patient_new RENAME TO patient")
+        // El DROP eliminó los índices v1: recrearlos.
         db.execSQL(
             "CREATE UNIQUE INDEX index_patient_service_id_hc_number " +
                 "ON patient(service_id, hc_number)",
         )
-        db.execSQL("CREATE INDEX index_patient_service_id_status ON patient(service_id, status)")
+        db.execSQL(
+            "CREATE INDEX index_patient_service_id_status " +
+                "ON patient(service_id, status)",
+        )
         db.execSQL("CREATE INDEX index_patient_full_name ON patient(full_name)")
 
-        // 2) case_card.
-        db.execSQL(
+        // 4) Restaurar hijos (el padre ya existe; treatment antes que
+        //    treatment_event por su FK).
+        val restoreOrder = listOf(
+            "patient_comorbidity",
+            "daily_record",
+            "pending",
+            "treatment",
+            "device",
+            "clinical_result",
+            "procedure",
+            "treatment_event",
+        )
+        restoreOrder.forEach { table ->
+            val i = children.indexOf(table)
+            db.execSQL("INSERT INTO $table SELECT * FROM _m12_bak$i")
+        }
+        children.indices.forEach { i -> db.execSQL("DROP TABLE _m12_bak$i") }
+            db.execSQL(
             """CREATE TABLE case_card (
                 id TEXT NOT NULL PRIMARY KEY,
                 patient_id TEXT NOT NULL REFERENCES patient(id) ON DELETE CASCADE,

@@ -102,6 +102,7 @@ private class CrashCards(private val bedByPatient: Map<String, String>) : CaseCa
     override suspend fun countDistinctBeds(): Int = 0
     override suspend fun deleteByPatient(patientId: String) {}
     override suspend fun recentDiagnoses(limit: Int): List<String> = emptyList()
+    override suspend fun findByJourneyAndBed(journeyId: String, bed: String): com.reynelbusto.paserevista.domain.model.CaseCard? = null
 }
 
 private class CrashHistory : CaseHistoryRepository {
@@ -207,7 +208,8 @@ class BoardPipelineCrashTest {
         val board = BoardUseCase(uow, failing, CrashPatients(emptyMap()), CrashCards(emptyMap()), CrashHistory(), clock)
         val (vm, captured) = runBoardPipeline(board)
         assertTrue("ninguna excepción debe escapar del pipeline, capturadas: $captured", captured.isEmpty())
-        assertTrue(vm.uiState.value.error != null)
+        // M7/M8: el fallo de carga deja loadError (con Reintentar), no el error transitorio.
+        assertTrue(vm.uiState.value.loadError != null)
     }
 
     @Test

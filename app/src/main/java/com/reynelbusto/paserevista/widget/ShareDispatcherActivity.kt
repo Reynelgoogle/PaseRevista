@@ -2,6 +2,7 @@ package com.reynelbusto.paserevista.widget
 
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import com.reynelbusto.paserevista.PaseRevistaApp
@@ -25,13 +26,23 @@ class ShareDispatcherActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         lifecycleScope.launch {
-            val text = withContext(Dispatchers.IO) { buildListText() }
-            val share = Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_TEXT, text)
+            // A4: blindaje total — un fallo aquí nunca debe crashear la app.
+            try {
+                val text = withContext(Dispatchers.IO) { buildListText() }
+                val share = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, text)
+                }
+                startActivity(Intent.createChooser(share, "Compartir entrega de guardia"))
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@ShareDispatcherActivity,
+                    "No se pudo preparar el texto para compartir",
+                    Toast.LENGTH_LONG,
+                ).show()
+            } finally {
+                finish()
             }
-            startActivity(Intent.createChooser(share, "Compartir entrega de guardia"))
-            finish()
         }
     }
 

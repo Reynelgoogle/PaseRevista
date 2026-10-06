@@ -92,7 +92,7 @@ fun MoreScreen(container: AppContainer) {
                 statusMessage = "Respaldo creado: Documents/EntregaGuardia/${entry.fileName}"
                 refreshBackups()
             } catch (e: Exception) {
-                statusMessage = "No se pudo crear el respaldo: ${e.message}"
+                statusMessage = "No se pudo crear el respaldo: ${e.message ?: "error desconocido"}"
             } finally {
                 working = false
             }
@@ -254,7 +254,7 @@ fun MoreScreen(container: AppContainer) {
                                 restartApp(context)
                             } catch (e: Exception) {
                                 snackbar.showSnackbar(
-                                    "No se pudo restaurar: ${e.message}",
+                                    "No se pudo restaurar: ${e.message ?: "error desconocido"}",
                                 )
                             }
                         }

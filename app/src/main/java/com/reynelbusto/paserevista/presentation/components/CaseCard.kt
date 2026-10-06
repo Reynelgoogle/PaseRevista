@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import com.reynelbusto.paserevista.domain.model.ClinicalOptions
 import com.reynelbusto.paserevista.domain.model.CustomField
 import com.reynelbusto.paserevista.domain.model.Sex
+import com.reynelbusto.paserevista.domain.model.displayDescription
 import com.reynelbusto.paserevista.domain.usecase.CaseCardPatch
 import com.reynelbusto.paserevista.presentation.camas.CardRow
 import com.reynelbusto.paserevista.presentation.theme.TextSecondary
@@ -634,7 +635,7 @@ fun PendingsSheet(
                 row.openPendings.forEach { pending ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(pending.description, style = MaterialTheme.typography.bodyMedium)
+                            Text(pending.displayDescription(), style = MaterialTheme.typography.bodyMedium)
                             Text(
                                 pending.type.name.lowercase().replaceFirstChar { it.uppercase() },
                                 style = MaterialTheme.typography.bodySmall,

@@ -49,6 +49,7 @@ interface DailyRecordRepository {
     /** Registro más reciente del paciente anterior a una fecha (referencia AYER). */
     suspend fun findLatestBefore(patientId: String, clinicalDate: String): DailyRecord?
     fun observeByPatient(patientId: String): Flow<List<DailyRecord>>
+    suspend fun deleteByPatient(patientId: String)
 }
 
 interface PendingRepository {
@@ -57,9 +58,11 @@ interface PendingRepository {
     fun observeRecentlyClosedByService(serviceId: String): Flow<List<Pending>>
     suspend fun getOpenByPatient(patientId: String): List<Pending>
     suspend fun getPending(id: String): Pending?
-    suspend fun create(pending: Pending): String
+    suspend fun create(pending: Pending, idempotencyKey: String? = null): String
     suspend fun update(pending: Pending)
     suspend fun deleteByPatient(patientId: String)
+    /** Idempotencia ante doble tap (M4): devuelve el existente si la clave se usó. */
+    suspend fun findByIdempotencyKey(key: String): Pending?
 }
 
 interface TreatmentRepository {
@@ -69,6 +72,7 @@ interface TreatmentRepository {
     suspend fun update(treatment: Treatment)
     fun observeEvents(treatmentId: String): Flow<List<com.reynelbusto.paserevista.domain.model.TreatmentEvent>>
     suspend fun addEvent(event: com.reynelbusto.paserevista.domain.model.TreatmentEvent)
+    suspend fun deleteByPatient(patientId: String)
 }
 
 interface DeviceRepository {
@@ -76,11 +80,13 @@ interface DeviceRepository {
     suspend fun getDevice(id: String): Device?
     suspend fun create(device: Device): String
     suspend fun update(device: Device)
+    suspend fun deleteByPatient(patientId: String)
 }
 
 interface ResultRepository {
     fun observeByPatient(patientId: String): Flow<List<ClinicalResult>>
     suspend fun create(result: ClinicalResult): String
+    suspend fun deleteByPatient(patientId: String)
 }
 
 interface ProcedureRepository {
@@ -101,6 +107,8 @@ interface CaseCardRepository {
     suspend fun getById(id: String): CaseCard?
     suspend fun findLatestBefore(patientId: String, clinicalDate: String): CaseCard?
     suspend fun findLatestByPatient(patientId: String): CaseCard?
+    /** Tarjeta de una cama en una jornada (validar duplicados, M3). */
+    suspend fun findByJourneyAndBed(journeyId: String, bed: String): CaseCard?
     suspend fun create(card: CaseCard): String
     suspend fun update(card: CaseCard)
     suspend fun deleteByPatient(patientId: String)
@@ -119,6 +127,8 @@ interface CustomFieldRepository {
     suspend fun delete(id: String)
     suspend fun deleteByPatient(patientId: String)
     suspend fun countByPatient(patientId: String): Int
+    /** B12: siguiente sortOrder sin colisiones (MAX+1, no COUNT). */
+    suspend fun maxSortOrderByPatient(patientId: String): Int
 }
 
 /** Historial de cambios de la tarjeta (append-only). */

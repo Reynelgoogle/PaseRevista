@@ -18,10 +18,13 @@ import com.reynelbusto.paserevista.domain.repository.CaseHistoryRepository
 import com.reynelbusto.paserevista.domain.repository.ClinicalUnitOfWork
 import com.reynelbusto.paserevista.domain.repository.CustomFieldRepository
 import com.reynelbusto.paserevista.domain.repository.DailyRecordRepository
+import com.reynelbusto.paserevista.domain.repository.DeviceRepository
 import com.reynelbusto.paserevista.domain.repository.JourneyRepository
 import com.reynelbusto.paserevista.domain.repository.PatientRepository
 import com.reynelbusto.paserevista.domain.repository.PendingRepository
 import com.reynelbusto.paserevista.domain.repository.ProcedureRepository
+import com.reynelbusto.paserevista.domain.repository.ResultRepository
+import com.reynelbusto.paserevista.domain.repository.TreatmentRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 
@@ -61,6 +64,11 @@ class AddBedUseCase(
             val journey = journeys.getOrCreateJourney(
                 serviceId, clock.todayIso(), JourneyOrigin.AUTO.code,
             )
+            // M3: no duplicar camas en la misma jornada.
+            val bedNumber = bed.trim()
+            check(cards.findByJourneyAndBed(journey.id, bedNumber) == null) {
+                "La cama $bedNumber ya existe hoy"
+            }
             val card = CaseCard(
                 id = newId(),
                 patientId = patient.id,
@@ -156,6 +164,15 @@ class CaseCardUseCase(
             touched("currentState", card.currentState, patch.currentState, "Estado")
             touched("antibiotic", card.antibiotic, patch.antibiotic, "Antibiótico")
             touched("bed", card.bed, patch.bed, "Cama")
+            // M3: al cambiar la cama, validar que no esté ocupada en la jornada.
+            val newBed = if ("bed" in patch.fieldsTouched && !patch.bed.isNullOrBlank())
+                patch.bed.trim() else card.bed
+            if (newBed != card.bed) {
+                val clash = cards.findByJourneyAndBed(card.journeyId, newBed)
+                check(clash == null || clash.id == card.id) {
+                    "La cama $newBed ya está ocupada"
+                }
+            }
             val updated = card.copy(
                 diagnosis = if ("diagnosis" in patch.fieldsTouched) patch.diagnosis else card.diagnosis,
                 scheduledProcedure = if ("scheduledProcedure" in patch.fieldsTouched)
@@ -164,8 +181,7 @@ class CaseCardUseCase(
                     patch.currentState else card.currentState,
                 antibiotic = if ("antibiotic" in patch.fieldsTouched)
                     patch.antibiotic else card.antibiotic,
-                bed = if ("bed" in patch.fieldsTouched && !patch.bed.isNullOrBlank())
-                    patch.bed.trim() else card.bed,
+                bed = newBed,
             )
             cards.update(updated)
             if (changes.isNotEmpty()) {
@@ -190,6 +206,11 @@ class CaseCardUseCase(
     }
 
     /** Datos del paciente (desplegable): todo opcional, sin requires. */
+    /**
+     * Semántica uniforme (M2): null = LIMPIAR el campo. El diálogo parte de
+     * los valores actuales, así que lo que llega null fue borrado por el
+     * usuario; lo que no se tocó llega con su valor actual.
+     */
     suspend fun updatePatientDetails(
         patientId: String,
         fullName: String?,
@@ -201,26 +222,31 @@ class CaseCardUseCase(
         sex: Sex?,
     ): Patient = unitOfWork.atomic {
         val patient = patients.getPatient(patientId) ?: error("Paciente no encontrado")
-        val changes = mutableListOf<String>()
-        if (fullName != null && fullName.trim() != (patient.fullName ?: "")) {
-            changes += "Nombre: ${patient.fullName ?: "—"} → ${fullName.trim().ifBlank { "—" }}"
-        }
-        if (hcNumber != null && hcNumber.trim() != (patient.hcNumber ?: "")) {
-            changes += "HC actualizada"
-        }
-        if (sex != patient.sex) {
-            changes += "Sexo: ${patient.sex?.name ?: "—"} → ${sex?.name ?: "—"}"
-        }
         val updated = patient.copy(
-            fullName = fullName?.trim()?.ifBlank { null } ?: patient.fullName,
-            hcNumber = hcNumber?.trim()?.ifBlank { null } ?: patient.hcNumber,
-            bloodGroup = bloodGroup?.trim()?.ifBlank { null } ?: patient.bloodGroup,
-            address = address?.trim()?.ifBlank { null } ?: patient.address,
-            mainDiagnosis = mainDiagnosis?.trim()?.ifBlank { null } ?: patient.mainDiagnosis,
+            fullName = fullName?.trim()?.ifBlank { null },
+            hcNumber = hcNumber?.trim()?.ifBlank { null },
+            bloodGroup = bloodGroup?.trim()?.ifBlank { null },
+            address = address?.trim()?.ifBlank { null },
+            mainDiagnosis = mainDiagnosis?.trim()?.ifBlank { null },
             isOutOfService = isOutOfService ?: patient.isOutOfService,
             sex = sex,
         )
         patients.updatePatient(updated)
+        val changes = mutableListOf<String>()
+        fun field(label: String, before: String?, after: String?) {
+            if (before != after) changes += "$label: ${before ?: "—"} → ${after ?: "—"}"
+        }
+        field("Nombre", patient.fullName, updated.fullName)
+        field("HC", patient.hcNumber, updated.hcNumber)
+        field("Grupo sanguíneo", patient.bloodGroup, updated.bloodGroup)
+        field("Dirección", patient.address, updated.address)
+        field("Diagnóstico", patient.mainDiagnosis, updated.mainDiagnosis)
+        if (patient.isOutOfService != updated.isOutOfService) {
+            changes += "Fuera de servicio: ${if (updated.isOutOfService) "sí" else "no"}"
+        }
+        if (patient.sex != updated.sex) {
+            changes += "Sexo: ${patient.sex?.name ?: "—"} → ${updated.sex?.name ?: "—"}"
+        }
         if (changes.isNotEmpty()) history.log(patientId, null, changes.joinToString("; "))
         updated
     }
@@ -240,8 +266,17 @@ class DeleteCaseUseCase(
     private val fields: CustomFieldRepository,
     private val pendings: PendingRepository,
     private val procedures: ProcedureRepository,
+    private val records: DailyRecordRepository,
+    private val treatments: TreatmentRepository,
+    private val devices: DeviceRepository,
+    private val results: ResultRepository,
 ) {
     suspend fun invoke(patientId: String) = unitOfWork.atomic {
+        // Hijos primero (FKs RESTRICT): eventos antes que tratamientos.
+        treatments.deleteByPatient(patientId)
+        records.deleteByPatient(patientId)
+        devices.deleteByPatient(patientId)
+        results.deleteByPatient(patientId)
         procedures.deleteByPatient(patientId)
         pendings.deleteByPatient(patientId)
         fields.deleteByPatient(patientId)
@@ -266,7 +301,7 @@ class CustomFieldUseCase(
                 patientId = patientId,
                 label = label.trim(),
                 value = value.trim(),
-                sortOrder = fields.countByPatient(patientId),
+                sortOrder = fields.maxSortOrderByPatient(patientId) + 1,
                 createdAt = now,
                 updatedAt = now,
             )

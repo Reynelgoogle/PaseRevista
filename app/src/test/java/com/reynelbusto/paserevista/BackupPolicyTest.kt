@@ -14,15 +14,30 @@ class BackupPolicyTest {
     // ---------- nombres ----------
 
     @Test
-    fun `nombre con formato respaldo-YYYY-MM-DD-HHmm-db`() {
+    fun `nombre con formato respaldo-YYYY-MM-DD-HHmmss-db`() {
         val name = BackupPolicy.backupFileName(LocalDateTime.of(2026, 10, 6, 6, 15))
-        assertEquals("respaldo-2026-10-06-0615.db", name)
+        assertEquals("respaldo-2026-10-06-061500.db", name)
     }
 
     @Test
     fun `nombre con minutos de un digito lleva cero`() {
         val name = BackupPolicy.backupFileName(LocalDateTime.of(2026, 1, 2, 3, 5))
-        assertEquals("respaldo-2026-01-02-0305.db", name)
+        assertEquals("respaldo-2026-01-02-030500.db", name)
+    }
+
+    @Test
+    fun `nombre incluye segundos y evita colisiones en el mismo minuto`() {
+        val a = BackupPolicy.backupFileName(LocalDateTime.of(2026, 10, 6, 6, 15, 10))
+        val b = BackupPolicy.backupFileName(LocalDateTime.of(2026, 10, 6, 6, 15, 45))
+        assertEquals("respaldo-2026-10-06-061510.db", a)
+        assertEquals("respaldo-2026-10-06-061545.db", b)
+        assertTrue(a != b)
+    }
+
+    @Test
+    fun `parse acepta formato anterior sin segundos`() {
+        val t = BackupPolicy.parseBackupDate("respaldo-2026-10-06-0615.db")
+        assertEquals(LocalDateTime.of(2026, 10, 6, 6, 15, 0), t)
     }
 
     @Test

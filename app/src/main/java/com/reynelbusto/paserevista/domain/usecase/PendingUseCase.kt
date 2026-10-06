@@ -31,9 +31,15 @@ class PendingUseCase(
         journeyOriginId: String? = null,
         idempotencyKey: String? = null,
     ): Pending {
-        require(description.isNotBlank()) { "La descripción es obligatoria" }
+        // M4: cero obligatorios — la descripción puede ir vacía.
         if (type == PendingType.INTERCONSULTATION) {
             require(!serviceDest.isNullOrBlank()) { "La interconsulta exige servicio destino" }
+        }
+        // Idempotencia ante doble tap: si la clave ya existe, se devuelve
+        // el pendiente original sin duplicar (la BD además tiene
+        // UNIQUE(idempotency_key) como red de seguridad).
+        if (idempotencyKey != null) {
+            pendings.findByIdempotencyKey(idempotencyKey)?.let { return it }
         }
         val now = clock.nowMillis()
         val pending = Pending(
@@ -52,9 +58,7 @@ class PendingUseCase(
             createdAt = now,
             updatedAt = now,
         )
-        // Idempotencia ante doble tap: si la clave ya existe, no duplicar.
-        // (La BD tiene UNIQUE(idempotency_key); aquí evitamos el throw.)
-        pendings.create(pending)
+        pendings.create(pending, idempotencyKey)
         return pending
     }
 

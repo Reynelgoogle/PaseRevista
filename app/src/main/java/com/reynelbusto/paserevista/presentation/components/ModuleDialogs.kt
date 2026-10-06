@@ -131,7 +131,7 @@ fun AddPendingDialog(
     var assignee by remember { mutableStateOf("") }
     var serviceDest by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
-    val valid = patientId != null && description.isNotBlank() &&
+    val valid = patientId != null &&
         (type != PendingType.INTERCONSULTATION || serviceDest.isNotBlank())
 
     AlertDialog(
@@ -148,7 +148,7 @@ fun AddPendingDialog(
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
-                    label = { Text("Descripción *") },
+                    label = { Text("Descripción (opcional)") },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Text("Tipo", style = MaterialTheme.typography.labelMedium, color = TextSecondary)

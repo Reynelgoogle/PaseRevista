@@ -21,35 +21,58 @@ private data class WidgetRow(val bed: String, val name: String, val ready: Boole
 
 private class CaseViewsFactory(private val context: Context) : RemoteViewsService.RemoteViewsFactory {
     private var rows: List<WidgetRow> = emptyList()
+    /** La última carga falló: `rows` son las filas anteriores (pueden estar vacías). */
+    private var loadFailed: Boolean = false
 
     private fun container() = (context.applicationContext as PaseRevistaApp).container
 
     override fun onCreate() = Unit
     override fun onDestroy() = Unit
-    override fun getCount(): Int = rows.size
     override fun getViewTypeCount(): Int = 1
     override fun getLoadingView(): RemoteViews? = null
     override fun getItemId(position: Int): Long = position.toLong()
     override fun hasStableIds(): Boolean = false
 
     override fun onDataSetChanged() {
-        // Hilo binder: runBlocking permitido.
-        rows = runBlocking {
-            val c = container()
-            val journeyId = c.ensureDay(DEFAULT_SERVICE_ID)
-            val cards = c.caseCardRepository.observeByJourney(journeyId).first()
-            cards.map { card ->
-                val patient = c.patientRepository.getPatient(card.patientId)
-                WidgetRow(
-                    bed = card.bed,
-                    name = patient?.displayName(card.bed) ?: "Cama ${card.bed}",
-                    ready = card.ready,
-                )
-            }.sortedWith(compareBy({ it.bed.toIntOrNull() }, { it.bed }))
+        // A5: blindaje total — una excepción aquí nunca debe propagarse
+        // al sistema (crash en segundo plano). Se conservan las filas
+        // anteriores y se marca el fallo para distinguirlo (M12).
+        try {
+            // Hilo binder: runBlocking permitido.
+            rows = runBlocking {
+                val c = container()
+                val journeyId = c.ensureDay(DEFAULT_SERVICE_ID)
+                val cards = c.caseCardRepository.observeByJourney(journeyId).first()
+                cards.map { card ->
+                    val patient = c.patientRepository.getPatient(card.patientId)
+                    WidgetRow(
+                        bed = card.bed,
+                        name = patient?.displayName(card.bed) ?: "Cama ${card.bed}",
+                        ready = card.ready,
+                    )
+                }.sortedWith(compareBy({ it.bed.toIntOrNull() }, { it.bed }))
+            }
+            loadFailed = false
+        } catch (e: Exception) {
+            loadFailed = true
         }
     }
 
+    override fun getCount(): Int =
+        if (loadFailed && rows.isEmpty()) 1 else rows.size
+
     override fun getViewAt(position: Int): RemoteViews {
+        // M12: "sin datos por error" ≠ "sin camas". Si falló la carga y no
+        // hay filas previas que conservar, se muestra aviso en vez del
+        // "Sin camas hoy" engañoso de la vista vacía.
+        if (loadFailed && rows.isEmpty()) {
+            return RemoteViews(context.packageName, R.layout.widget_case_item).apply {
+                setTextViewText(R.id.widget_item_bed, "AVISO")
+                setTextViewText(R.id.widget_item_name, "No se pudieron cargar las camas")
+                setTextViewText(R.id.widget_item_tag, "ERROR")
+                setOnClickFillInIntent(R.id.widget_item_root, Intent())
+            }
+        }
         val row = rows[position]
         return RemoteViews(context.packageName, R.layout.widget_case_item).apply {
             setTextViewText(R.id.widget_item_bed, "CAMA ${row.bed}")

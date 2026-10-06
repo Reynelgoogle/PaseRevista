@@ -19,6 +19,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -40,6 +41,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.reynelbusto.paserevista.di.AppContainer
+import com.reynelbusto.paserevista.domain.model.displayDescription
 import com.reynelbusto.paserevista.presentation.components.CaseCardView
 import com.reynelbusto.paserevista.presentation.components.EmptyState
 import com.reynelbusto.paserevista.presentation.theme.TextSecondary
@@ -105,56 +107,70 @@ fun CamasScreen(container: AppContainer) {
             }
         },
     ) { padding ->
-        when {
-            state.isLoading -> Column(
-                Modifier
-                    .padding(padding)
-                    .fillMaxSize(),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) { CircularProgressIndicator() }
+        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+            // M6: refresco no bloqueante — barra sutil arriba, la lista sigue visible.
+            if (state.isRefreshing) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+            when {
+                state.isLoading -> Column(
+                    Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) { CircularProgressIndicator() }
 
-            state.rows.isEmpty() -> EmptyState(
-                title = "Sin camas",
-                message = "Añada la primera cama con el botón ＋. Solo necesita el número.",
-                actionLabel = "Añadir cama",
-                onAction = { showAddBed = true },
-                modifier = Modifier.padding(padding),
-            )
+                // M7: si falla la carga inicial, error con Reintentar
+                // (no el "Sin camas" engañoso).
+                state.rows.isEmpty() && state.error != null -> EmptyState(
+                    title = "No se pudo cargar",
+                    message = state.error ?: "Error al cargar",
+                    actionLabel = "Reintentar",
+                    onAction = { vm.refresh() },
+                    modifier = Modifier.fillMaxSize(),
+                )
 
-            else -> LazyColumn(
-                modifier = Modifier.padding(padding).fillMaxSize(),
-                contentPadding = PaddingValues(12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(state.rows, key = { it.card.id }) { row ->
-                    CaseCardView(
-                        row = row,
-                        displayName = vm.displayName(row),
-                        recentDiagnoses = state.recentDiagnoses,
-                        onToggleReady = { vm.toggleReady(row.card.id) },
-                        onSaveFields = { patch -> vm.saveFields(row.card.id, patch) },
-                        onSavePatientDetails = { name, hc, group, addr, dx, out, sex ->
-                            vm.savePatientDetails(
-                                row.patient.id, name, hc, group, addr, dx, out, sex,
-                            )
-                        },
-                        onAddCustomField = { label, value ->
-                            vm.addCustomField(row.patient.id, label, value)
-                        },
-                        onRenameCustomField = { field, newLabel ->
-                            vm.renameCustomField(field, newLabel)
-                        },
-                        onSetCustomFieldValue = { field, value ->
-                            vm.setCustomFieldValue(field, value)
-                        },
-                        onDeleteCustomField = { field -> vm.deleteCustomField(field) },
-                        onAddPending = { form -> vm.addPending(row.patient.id, form) },
-                        onCompletePending = { id -> vm.completePending(id) },
-                        onDischarge = { vm.dischargeBed(row.patient.id) },
-                        onShare = { complete -> shareText(vm.shareCardText(row, complete)) },
-                        onDeleteCase = { vm.deleteCase(row.patient.id) },
-                    )
+                state.rows.isEmpty() -> EmptyState(
+                    title = "Sin camas",
+                    message = "Añada la primera cama con el botón ＋. Solo necesita el número.",
+                    actionLabel = "Añadir cama",
+                    onAction = { showAddBed = true },
+                    modifier = Modifier.fillMaxSize(),
+                )
+
+                else -> LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(state.rows, key = { it.card.id }) { row ->
+                        CaseCardView(
+                            row = row,
+                            displayName = vm.displayName(row),
+                            recentDiagnoses = state.recentDiagnoses,
+                            onToggleReady = { vm.toggleReady(row.card.id) },
+                            onSaveFields = { patch -> vm.saveFields(row.card.id, patch) },
+                            onSavePatientDetails = { name, hc, group, addr, dx, out, sex ->
+                                vm.savePatientDetails(
+                                    row.patient.id, name, hc, group, addr, dx, out, sex,
+                                )
+                            },
+                            onAddCustomField = { label, value ->
+                                vm.addCustomField(row.patient.id, label, value)
+                            },
+                            onRenameCustomField = { field, newLabel ->
+                                vm.renameCustomField(field, newLabel)
+                            },
+                            onSetCustomFieldValue = { field, value ->
+                                vm.setCustomFieldValue(field, value)
+                            },
+                            onDeleteCustomField = { field -> vm.deleteCustomField(field) },
+                            onAddPending = { form -> vm.addPending(row.patient.id, form) },
+                            onCompletePending = { id -> vm.completePending(id) },
+                            onDischarge = { vm.dischargeBed(row.patient.id) },
+                            onShare = { complete -> shareText(vm.shareCardText(row, complete)) },
+                            onDeleteCase = { vm.deleteCase(row.patient.id) },
+                        )
+                    }
                 }
             }
         }
@@ -166,6 +182,36 @@ fun CamasScreen(container: AppContainer) {
             onConfirm = { bed ->
                 showAddBed = false
                 vm.addBed(bed)
+            },
+        )
+    }
+
+    // A3: alta bloqueada por P1 — diálogo con la lista y confirmación explícita.
+    val confirm = state.dischargeConfirm
+    if (confirm != null) {
+        AlertDialog(
+            onDismissRequest = { vm.dismissDischargeConfirm() },
+            title = { Text("Alta con pendientes P1") },
+            text = {
+                Column {
+                    Text(
+                        "«${confirm.patientLabel}» tiene pendientes P1 abiertos. " +
+                            "El alta los dejará sin resolver:",
+                    )
+                    confirm.blockingPendings.forEach { p ->
+                        Text("• ${p.displayDescription()}", modifier = Modifier.padding(top = 4.dp))
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = { vm.confirmDischarge() }) {
+                    Text("Dar alta igual")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { vm.dismissDischargeConfirm() }) {
+                    Text("Cancelar")
+                }
             },
         )
     }

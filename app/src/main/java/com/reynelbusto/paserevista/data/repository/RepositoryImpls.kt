@@ -42,14 +42,14 @@ import com.reynelbusto.paserevista.domain.repository.PendingRepository
 import com.reynelbusto.paserevista.domain.repository.ProcedureRepository
 import com.reynelbusto.paserevista.domain.repository.ResultRepository
 import com.reynelbusto.paserevista.domain.repository.TreatmentRepository
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.withContext
 
 /**
  * Implementaciones Room de los repositorios del dominio.
- * - Todo acceso a disco en Dispatchers.IO.
+ * - SIN withContext(Dispatchers.IO): los DAO suspend/Flow de Room son main-safe
+ *   y deben correr en el hilo llamador para participar en withTransaction
+ *   (Room rastrea la transacción por hilo; saltar de dispatcher la rompería).
  * - `updated_at` lo toca el repositorio (touch centralizado); la UI y los
  *   casos de uso no lo manipulan.
  * - Sin reglas clínicas aquí: se aplican, no se definen.
@@ -66,12 +66,12 @@ class PatientRepositoryImpl(
         dao.searchWithBed(serviceId, clock.todayIso(), query.trim())
             .map { list -> list.map { it.toDomain() } }
 
-    override suspend fun getPatient(id: String): Patient? = withContext(Dispatchers.IO) {
-        val entity = dao.getById(id) ?: return@withContext null
+    override suspend fun getPatient(id: String): Patient? = run {
+        val entity = dao.getById(id) ?: return@run null
         entity.toDomain(dao.getComorbidities(id))
     }
 
-    override suspend fun createPatient(patient: Patient): String = withContext(Dispatchers.IO) {
+    override suspend fun createPatient(patient: Patient): String = run {
         dao.insert(patient.toEntity())
         dao.insertComorbidities(
             patient.comorbidities.map { PatientComorbidityEntity(patient.id, it) },
@@ -79,22 +79,22 @@ class PatientRepositoryImpl(
         patient.id
     }
 
-    override suspend fun updatePatient(patient: Patient) = withContext(Dispatchers.IO) {
+    override suspend fun updatePatient(patient: Patient) = run {
         dao.update(patient.copy(updatedAt = clock.nowMillis()).toEntity())
     }
 
     override suspend fun getActivePatients(serviceId: String): List<Patient> =
-        withContext(Dispatchers.IO) {
+        run {
             dao.getActiveByService(serviceId).map { it.toDomain() }
         }
 
     override suspend fun findByHc(serviceId: String, hcNumber: String): Patient? =
-        withContext(Dispatchers.IO) {
-            val entity = dao.findByServiceAndHc(serviceId, hcNumber.trim()) ?: return@withContext null
+        run {
+            val entity = dao.findByServiceAndHc(serviceId, hcNumber.trim()) ?: return@run null
             entity.toDomain(dao.getComorbidities(entity.id))
         }
 
-    override suspend fun delete(id: String) = withContext(Dispatchers.IO) {
+    override suspend fun delete(id: String) = run {
         dao.deleteById(id)
     }
 }
@@ -107,7 +107,7 @@ class JourneyRepositoryImpl(
         dao.observeCurrent(serviceId, clinicalDate).map { it?.toDomain() }
 
     override suspend fun getJourney(serviceId: String, clinicalDate: String): Journey? =
-        withContext(Dispatchers.IO) {
+        run {
             dao.findByServiceAndDate(serviceId, clinicalDate)?.toDomain()
         }
 
@@ -115,7 +115,7 @@ class JourneyRepositoryImpl(
         serviceId: String,
         clinicalDate: String,
         originCode: String,
-    ): Journey = withContext(Dispatchers.IO) {
+    ): Journey = run {
         val now = clock.nowMillis()
         val candidate = Journey(
             id = newId(),
@@ -138,7 +138,7 @@ class JourneyRepositoryImpl(
     override suspend fun findPreviousJourney(
         serviceId: String,
         clinicalDate: String,
-    ): Journey? = withContext(Dispatchers.IO) {
+    ): Journey? = run {
         dao.findPrevious(serviceId, clinicalDate)?.toDomain()
     }
 
@@ -156,27 +156,31 @@ class DailyRecordRepositoryImpl(
     override suspend fun getByPatientAndJourney(
         patientId: String,
         journeyId: String,
-    ): DailyRecord? = withContext(Dispatchers.IO) {
+    ): DailyRecord? = run {
         dao.getByPatientAndJourney(patientId, journeyId)?.toDomain()
     }
 
-    override suspend fun create(record: DailyRecord): String = withContext(Dispatchers.IO) {
+    override suspend fun create(record: DailyRecord): String = run {
         dao.insert(record.toEntity())
         record.id
     }
 
-    override suspend fun update(record: DailyRecord) = withContext(Dispatchers.IO) {
+    override suspend fun update(record: DailyRecord) = run {
         dao.update(record.copy(updatedAt = clock.nowMillis()).toEntity())
     }
 
-    override suspend fun createAll(records: List<DailyRecord>) = withContext(Dispatchers.IO) {
+    override suspend fun createAll(records: List<DailyRecord>) = run {
         if (records.isNotEmpty()) dao.insertAll(records.map { it.toEntity() })
+    }
+
+    override suspend fun deleteByPatient(patientId: String) = run {
+        dao.deleteByPatient(patientId)
     }
 
     override suspend fun findLatestBefore(
         patientId: String,
         clinicalDate: String,
-    ): DailyRecord? = withContext(Dispatchers.IO) {
+    ): DailyRecord? = run {
         dao.findLatestBefore(patientId, clinicalDate)?.toDomain()
     }
 
@@ -198,24 +202,28 @@ class PendingRepositoryImpl(
         dao.observeRecentlyClosedByService(serviceId).map { list -> list.map { it.toDomain() } }
 
     override suspend fun getOpenByPatient(patientId: String): List<Pending> =
-        withContext(Dispatchers.IO) {
+        run {
             dao.getOpenByPatient(patientId).map { it.toDomain() }
         }
 
-    override suspend fun create(pending: Pending): String = withContext(Dispatchers.IO) {
-        dao.insert(pending.toEntity())
+    override suspend fun create(pending: Pending, idempotencyKey: String?): String = run {
+        dao.insert(pending.toEntity(idempotencyKey))
         pending.id
     }
 
-    override suspend fun getPending(id: String): Pending? = withContext(Dispatchers.IO) {
+    override suspend fun findByIdempotencyKey(key: String): Pending? = run {
+        dao.findByIdempotencyKey(key)?.toDomain()
+    }
+
+    override suspend fun getPending(id: String): Pending? = run {
         dao.getById(id)?.toDomain()
     }
 
-    override suspend fun update(pending: Pending) = withContext(Dispatchers.IO) {
+    override suspend fun update(pending: Pending) = run {
         dao.update(pending.copy(updatedAt = clock.nowMillis()).toEntity())
     }
 
-    override suspend fun deleteByPatient(patientId: String) = withContext(Dispatchers.IO) {
+    override suspend fun deleteByPatient(patientId: String) = run {
         dao.deleteByPatient(patientId)
     }
 }
@@ -228,24 +236,29 @@ class TreatmentRepositoryImpl(
     override fun observeActiveByPatient(patientId: String): Flow<List<Treatment>> =
         dao.observeActiveByPatient(patientId).map { list -> list.map { it.toDomain() } }
 
-    override suspend fun create(treatment: Treatment): String = withContext(Dispatchers.IO) {
+    override suspend fun create(treatment: Treatment): String = run {
         dao.insert(treatment.toEntity())
         treatment.id
     }
 
-    override suspend fun getTreatment(id: String): Treatment? = withContext(Dispatchers.IO) {
+    override suspend fun getTreatment(id: String): Treatment? = run {
         dao.getById(id)?.toDomain()
     }
 
-    override suspend fun update(treatment: Treatment) = withContext(Dispatchers.IO) {
+    override suspend fun update(treatment: Treatment) = run {
         dao.update(treatment.copy(updatedAt = clock.nowMillis()).toEntity())
     }
 
     override fun observeEvents(treatmentId: String): Flow<List<TreatmentEvent>> =
         eventDao.observeByTreatment(treatmentId).map { list -> list.map { it.toDomain() } }
 
-    override suspend fun addEvent(event: TreatmentEvent) = withContext(Dispatchers.IO) {
+    override suspend fun addEvent(event: TreatmentEvent) = run {
         eventDao.insert(event.toEntity())
+    }
+
+    override suspend fun deleteByPatient(patientId: String) = run {
+        eventDao.deleteByPatient(patientId)
+        dao.deleteByPatient(patientId)
     }
 }
 
@@ -256,17 +269,21 @@ class DeviceRepositoryImpl(
     override fun observeActiveByPatient(patientId: String): Flow<List<Device>> =
         dao.observeActiveByPatient(patientId).map { list -> list.map { it.toDomain() } }
 
-    override suspend fun create(device: Device): String = withContext(Dispatchers.IO) {
+    override suspend fun create(device: Device): String = run {
         dao.insert(device.toEntity())
         device.id
     }
 
-    override suspend fun getDevice(id: String): Device? = withContext(Dispatchers.IO) {
+    override suspend fun getDevice(id: String): Device? = run {
         dao.getById(id)?.toDomain()
     }
 
-    override suspend fun update(device: Device) = withContext(Dispatchers.IO) {
+    override suspend fun update(device: Device) = run {
         dao.update(device.copy(updatedAt = clock.nowMillis()).toEntity())
+    }
+
+    override suspend fun deleteByPatient(patientId: String) = run {
+        dao.deleteByPatient(patientId)
     }
 }
 
@@ -276,9 +293,13 @@ class ResultRepositoryImpl(
     override fun observeByPatient(patientId: String): Flow<List<ClinicalResult>> =
         dao.observeByPatient(patientId).map { list -> list.map { it.toDomain() } }
 
-    override suspend fun create(result: ClinicalResult): String = withContext(Dispatchers.IO) {
+    override suspend fun create(result: ClinicalResult): String = run {
         dao.insert(result.toEntity())
         result.id
+    }
+
+    override suspend fun deleteByPatient(patientId: String) = run {
+        dao.deleteByPatient(patientId)
     }
 }
 
@@ -296,24 +317,24 @@ class ProcedureRepositoryImpl(
         dao.observeRecentPerformed(limit).map { list -> list.map { it.toDomain() } }
 
     override suspend fun findActiveByPatient(patientId: String): Procedure? =
-        withContext(Dispatchers.IO) {
+        run {
             dao.findActiveByPatient(patientId)?.toDomain()
         }
 
-    override suspend fun create(procedure: Procedure): String = withContext(Dispatchers.IO) {
+    override suspend fun create(procedure: Procedure): String = run {
         dao.insert(procedure.toEntity())
         procedure.id
     }
 
-    override suspend fun getProcedure(id: String): Procedure? = withContext(Dispatchers.IO) {
+    override suspend fun getProcedure(id: String): Procedure? = run {
         dao.getById(id)?.toDomain()
     }
 
-    override suspend fun update(procedure: Procedure) = withContext(Dispatchers.IO) {
+    override suspend fun update(procedure: Procedure) = run {
         dao.update(procedure.copy(updatedAt = clock.nowMillis()).toEntity())
     }
 
-    override suspend fun deleteByPatient(patientId: String) = withContext(Dispatchers.IO) {
+    override suspend fun deleteByPatient(patientId: String) = run {
         dao.deleteByPatient(patientId)
     }
 }
@@ -328,48 +349,53 @@ class CaseCardRepositoryImpl(
     override suspend fun getByPatientAndJourney(
         patientId: String,
         journeyId: String,
-    ): CaseCard? = withContext(Dispatchers.IO) {
+    ): CaseCard? = run {
         dao.getByPatientAndJourney(patientId, journeyId)?.toDomain()
     }
 
-    override suspend fun getById(id: String): CaseCard? = withContext(Dispatchers.IO) {
+    override suspend fun getById(id: String): CaseCard? = run {
         dao.getById(id)?.toDomain()
     }
 
     override suspend fun findLatestBefore(
         patientId: String,
         clinicalDate: String,
-    ): CaseCard? = withContext(Dispatchers.IO) {
+    ): CaseCard? = run {
         dao.findLatestBefore(patientId, clinicalDate)?.toDomain()
     }
 
     override suspend fun findLatestByPatient(patientId: String): CaseCard? =
-        withContext(Dispatchers.IO) {
+        run {
             dao.findLatestByPatient(patientId)?.toDomain()
         }
 
-    override suspend fun create(card: CaseCard): String = withContext(Dispatchers.IO) {
+    override suspend fun findByJourneyAndBed(journeyId: String, bed: String): CaseCard? =
+        run {
+            dao.findByJourneyAndBed(journeyId, bed)?.toDomain()
+        }
+
+    override suspend fun create(card: CaseCard): String = run {
         dao.insert(card.toEntity())
         card.id
     }
 
-    override suspend fun update(card: CaseCard) = withContext(Dispatchers.IO) {
+    override suspend fun update(card: CaseCard) = run {
         dao.update(card.copy(updatedAt = clock.nowMillis()).toEntity())
     }
 
-    override suspend fun deleteByPatient(patientId: String) = withContext(Dispatchers.IO) {
+    override suspend fun deleteByPatient(patientId: String) = run {
         dao.deleteByPatient(patientId)
     }
 
-    override suspend fun countAll(): Int = withContext(Dispatchers.IO) {
+    override suspend fun countAll(): Int = run {
         dao.countAll()
     }
 
-    override suspend fun countDistinctBeds(): Int = withContext(Dispatchers.IO) {
+    override suspend fun countDistinctBeds(): Int = run {
         dao.countDistinctBeds()
     }
 
-    override suspend fun recentDiagnoses(limit: Int): List<String> = withContext(Dispatchers.IO) {
+    override suspend fun recentDiagnoses(limit: Int): List<String> = run {
         dao.recentDiagnoses(limit)
     }
 }
@@ -381,25 +407,29 @@ class CustomFieldRepositoryImpl(
     override fun observeByPatient(patientId: String): Flow<List<CustomField>> =
         dao.observeByPatient(patientId).map { list -> list.map { it.toDomain() } }
 
-    override suspend fun create(field: CustomField): String = withContext(Dispatchers.IO) {
+    override suspend fun create(field: CustomField): String = run {
         dao.insert(field.toEntity())
         field.id
     }
 
-    override suspend fun update(field: CustomField) = withContext(Dispatchers.IO) {
+    override suspend fun update(field: CustomField) = run {
         dao.update(field.copy(updatedAt = clock.nowMillis()).toEntity())
     }
 
-    override suspend fun delete(id: String) = withContext(Dispatchers.IO) {
+    override suspend fun delete(id: String) = run {
         dao.deleteById(id)
     }
 
-    override suspend fun deleteByPatient(patientId: String) = withContext(Dispatchers.IO) {
+    override suspend fun deleteByPatient(patientId: String) = run {
         dao.deleteByPatient(patientId)
     }
 
-    override suspend fun countByPatient(patientId: String): Int = withContext(Dispatchers.IO) {
+    override suspend fun countByPatient(patientId: String): Int = run {
         dao.countByPatient(patientId)
+    }
+
+    override suspend fun maxSortOrderByPatient(patientId: String): Int = run {
+        dao.maxSortOrderByPatient(patientId)
     }
 }
 
@@ -411,7 +441,7 @@ class CaseHistoryRepositoryImpl(
         dao.observeByPatient(patientId).map { list -> list.map { it.toDomain() } }
 
     override suspend fun log(patientId: String, journeyId: String?, summary: String) =
-        withContext(Dispatchers.IO) {
+        run {
             dao.insert(
                 CaseHistoryEntity(
                     id = newId(),

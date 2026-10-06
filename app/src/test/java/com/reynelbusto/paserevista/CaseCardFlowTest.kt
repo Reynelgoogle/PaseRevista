@@ -122,6 +122,7 @@ private class FakeCards : CaseCardRepository {
 
     override suspend fun recentDiagnoses(limit: Int): List<String> =
         store.values.mapNotNull { it.diagnosis?.ifBlank { null } }.distinct().take(limit)
+    override suspend fun findByJourneyAndBed(journeyId: String, bed: String): com.reynelbusto.paserevista.domain.model.CaseCard? = null
 }
 
 private class FakeHistory : CaseHistoryRepository {

@@ -9,7 +9,7 @@ plugins {
 
 android {
     namespace = "com.reynelbusto.paserevista"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.reynelbusto.paserevista"

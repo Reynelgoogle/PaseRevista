@@ -56,12 +56,17 @@ interface PatientDao {
     /**
      * Búsqueda global incluyendo cama (vive en el DailyRecord de la jornada dada).
      * Offline y tolerante: LIKE por nombre, HC, diagnóstico o cama.
+     * M11: el join a daily_record se restringe a la jornada actual — antes
+     * unía TODAS las jornadas y la cama de ayer podía colar un falso positivo.
      */
     @Query(
         """SELECT DISTINCT p.* FROM patient p
            LEFT JOIN daily_record dr ON dr.patient_id = p.id
-           LEFT JOIN journey j ON j.id = dr.journey_id
-             AND j.service_id = :serviceId AND j.clinical_date = :clinicalDate
+             AND dr.journey_id = (
+               SELECT j.id FROM journey j
+               WHERE j.service_id = :serviceId AND j.clinical_date = :clinicalDate
+               LIMIT 1
+             )
            WHERE p.service_id = :serviceId AND p.deleted_at IS NULL
              AND (p.full_name LIKE '%' || :query || '%'
                OR p.hc_number LIKE '%' || :query || '%'
@@ -170,6 +175,9 @@ interface DailyRecordDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertAll(records: List<DailyRecordEntity>)
 
+    @Query("DELETE FROM daily_record WHERE patient_id = :patientId")
+    suspend fun deleteByPatient(patientId: String)
+
     /**
      * Registro más reciente del paciente anterior a una fecha clínica.
      * Es la referencia AYER (solo lectura en la ficha).
@@ -202,6 +210,9 @@ interface PendingDao {
 
     @Query("DELETE FROM `pending` WHERE patient_id = :patientId")
     suspend fun deleteByPatient(patientId: String)
+
+    @Query("SELECT * FROM `pending` WHERE idempotency_key = :key LIMIT 1")
+    suspend fun findByIdempotencyKey(key: String): PendingEntity?
 
     @Query(
         """SELECT * FROM pending
@@ -264,6 +275,9 @@ interface TreatmentDao {
 
     @Query("SELECT * FROM treatment WHERE id = :id")
     suspend fun getById(id: String): TreatmentEntity?
+
+    @Query("DELETE FROM treatment WHERE patient_id = :patientId")
+    suspend fun deleteByPatient(patientId: String)
 }
 
 @Dao
@@ -284,6 +298,12 @@ interface TreatmentEventDao {
            ORDER BY occurred_at""",
     )
     suspend fun getByTreatment(treatmentId: String): List<TreatmentEventEntity>
+
+    @Query(
+        """DELETE FROM treatment_event WHERE treatment_id IN
+           (SELECT id FROM treatment WHERE patient_id = :patientId)""",
+    )
+    suspend fun deleteByPatient(patientId: String)
 }
 
 @Dao
@@ -303,6 +323,9 @@ interface DeviceDao {
 
     @Query("SELECT * FROM device WHERE id = :id")
     suspend fun getById(id: String): DeviceEntity?
+
+    @Query("DELETE FROM device WHERE patient_id = :patientId")
+    suspend fun deleteByPatient(patientId: String)
 }
 
 @Dao
@@ -316,6 +339,9 @@ interface ResultDao {
            ORDER BY result_date DESC""",
     )
     fun observeByPatient(patientId: String): Flow<List<ResultEntity>>
+
+    @Query("DELETE FROM clinical_result WHERE patient_id = :patientId")
+    suspend fun deleteByPatient(patientId: String)
 }
 
 @Dao
@@ -396,6 +422,10 @@ interface CaseCardDao {
     @Query("SELECT * FROM case_card WHERE patient_id = :patientId ORDER BY created_at DESC LIMIT 1")
     suspend fun findLatestByPatient(patientId: String): CaseCardEntity?
 
+    /** Tarjeta de una cama en una jornada (para validar duplicados). */
+    @Query("SELECT * FROM case_card WHERE journey_id = :journeyId AND bed = :bed LIMIT 1")
+    suspend fun findByJourneyAndBed(journeyId: String, bed: String): CaseCardEntity?
+
     /** Conteos para el sidecar del respaldo. */
     @Query("SELECT COUNT(*) FROM case_card")
     suspend fun countAll(): Int
@@ -435,6 +465,10 @@ interface CustomFieldDao {
 
     @Query("SELECT COUNT(*) FROM custom_field WHERE patient_id = :patientId")
     suspend fun countByPatient(patientId: String): Int
+
+    /** B12: siguiente sortOrder sin colisiones (MAX+1, no COUNT). */
+    @Query("SELECT COALESCE(MAX(sort_order), -1) FROM custom_field WHERE patient_id = :patientId")
+    suspend fun maxSortOrderByPatient(patientId: String): Int
 }
 
 @Dao

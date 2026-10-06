@@ -18,6 +18,7 @@ import com.reynelbusto.paserevista.domain.model.displayName
 import com.reynelbusto.paserevista.domain.usecase.CardShareData
 import com.reynelbusto.paserevista.domain.usecase.CaseCardPatch
 import com.reynelbusto.paserevista.domain.usecase.DEFAULT_SERVICE_ID
+import com.reynelbusto.paserevista.domain.usecase.DischargeUseCase
 import com.reynelbusto.paserevista.domain.usecase.ShareFormatter
 import com.reynelbusto.paserevista.presentation.components.PendingFormData
 import com.reynelbusto.paserevista.widget.CaseWidgetProvider
@@ -39,6 +40,10 @@ data class CardRow(
 ) {
     val hasInterconsult: Boolean
         get() = openPendings.any { it.type == PendingType.INTERCONSULTATION }
+
+    /** B2: la tarjeta muestra nombre propio (no el "Cama N" genérico). */
+    val hasCustomName: Boolean
+        get() = patient.fullName?.isNotBlank() == true
 
     fun shareData(): CardShareData = CardShareData(
         bed = card.bed,
@@ -62,13 +67,24 @@ data class CardRow(
 internal fun isListedPatient(patient: Patient): Boolean =
     patient.status == PatientState.ACTIVE
 
+/** Diálogo de confirmación de alta cuando hay P1 abiertos (caso D). */
+data class DischargeConfirm(
+    val patientId: String,
+    val patientLabel: String,
+    val blockingPendings: List<Pending>,
+)
+
 data class CamasUiState(
     val isLoading: Boolean = true,
+    /** M6: refresco en segundo plano (mutaciones) — indicador sutil, sin tapar la lista. */
+    val isRefreshing: Boolean = false,
     val error: String? = null,
     val rows: List<CardRow> = emptyList(),
     val dateLabel: String = "",
     /** Últimos diagnósticos usados (sugerencias al editar la tarjeta). */
     val recentDiagnoses: List<String> = emptyList(),
+    /** Alta pendiente de confirmación explícita por P1 abiertos. */
+    val dischargeConfirm: DischargeConfirm? = null,
 )
 
 /**
@@ -90,73 +106,71 @@ class CamasViewModel(
     }
 
     fun refresh() {
-        viewModelScope.launch { refreshNow() }
-    }
-
-    /**
-     * Recarga el listado. Es suspend para que [mutate] pueda encadenar
-     * la operación y el refresco en orden: antes, el error de la
-     * operación se perdía porque refresh() lanzaba otra corrutina que
-     * lo sobrescribía con null (borrar/dar de alta "no hacían nada").
-     */
-    private suspend fun refreshNow() {
-        _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-        try {
-            val journeyId = container.ensureDay(DEFAULT_SERVICE_ID)
-            val cards = container.caseCardRepository.observeByJourney(journeyId).first()
-            val rows = cards.map { card ->
-                val patient = container.patientRepository.getPatient(card.patientId)
-                    ?: return@map null
-                // BUG 2: el alta saca la tarjeta del listado (el historial se conserva).
-                if (!isListedPatient(patient)) return@map null
-                CardRow(
-                    card = card,
-                    patient = patient,
-                    openPendings = container.pendingRepository
-                        .getOpenByPatient(card.patientId),
-                    customFields = container.customFieldRepository
-                        .observeByPatient(card.patientId).first(),
-                    history = container.caseHistoryRepository
-                        .observeByPatient(card.patientId).first(),
-                )
-            }.filterNotNull().sortedWith(
-                compareBy({ it.card.bed.toIntOrNull() }, { it.card.bed }),
-            )
-            _uiState.value = CamasUiState(
-                isLoading = false,
-                rows = rows,
-                dateLabel = prettyDate(clock.todayIso()),
-                recentDiagnoses = container.caseCardRepository.recentDiagnoses(8),
-            )
-            CaseWidgetProvider.requestUpdate(appContext)
-        } catch (e: Exception) {
+        viewModelScope.launch {
+            // M5: no borrar el error de una mutación fallida que aún no se
+            // mostró (el Snackbar lo limpia con clearError() al mostrarlo).
+            val pendingError = _uiState.value.error
+            val pendingConfirm = _uiState.value.dischargeConfirm
+            // M6: spinner a pantalla completa solo en la carga inicial; en
+            // refrescos (mutaciones) la lista sigue visible con indicador sutil.
+            val initial = _uiState.value.rows.isEmpty()
             _uiState.value = _uiState.value.copy(
-                isLoading = false,
-                error = e.message ?: "Error al cargar",
+                isLoading = initial,
+                isRefreshing = !initial,
+                error = null,
             )
+            try {
+                val journeyId = container.ensureDay(DEFAULT_SERVICE_ID)
+                val cards = container.caseCardRepository.observeByJourney(journeyId).first()
+                val rows = cards.map { card ->
+                    val patient = container.patientRepository.getPatient(card.patientId)
+                        ?: return@map null
+                    // El alta saca la tarjeta del listado (el historial se conserva).
+                    if (!isListedPatient(patient)) return@map null
+                    CardRow(
+                        card = card,
+                        patient = patient,
+                        openPendings = container.pendingRepository
+                            .getOpenByPatient(card.patientId),
+                        customFields = container.customFieldRepository
+                            .observeByPatient(card.patientId).first(),
+                        history = container.caseHistoryRepository
+                            .observeByPatient(card.patientId).first(),
+                    )
+                }.filterNotNull().sortedWith(
+                    compareBy({ it.card.bed.toIntOrNull() }, { it.card.bed }),
+                )
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    isRefreshing = false,
+                    rows = rows,
+                    dateLabel = prettyDate(clock.todayIso()),
+                    recentDiagnoses = container.caseCardRepository.recentDiagnoses(8),
+                    error = pendingError,
+                    dischargeConfirm = pendingConfirm,
+                )
+                CaseWidgetProvider.requestUpdate(appContext)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    isRefreshing = false,
+                    error = e.message ?: "Error al cargar",
+                )
+            }
         }
     }
 
-    /**
-     * Ejecuta una operación y recarga en orden. Si la operación falla,
-     * el error se conserva DESPUÉS del refresco para que la UI lo muestre:
-     * antes se fijaba antes de refrescar y refresh() lo borraba con null,
-     * así que borrar/dar de alta fallaban en silencio ("no hace nada").
-     */
     private fun mutate(block: suspend () -> Unit) {
         viewModelScope.launch {
-            val opError = try {
+            try {
                 block()
-                null
             } catch (e: Exception) {
-                e.message ?: "Error en la operación"
+                _uiState.value = _uiState.value.copy(error = e.message ?: "Error inesperado")
             }
-            refreshNow()
-            if (opError != null) {
-                _uiState.value = _uiState.value.copy(error = opError)
-            }
+            refresh()
         }
     }
+
     fun addBed(bed: String) = mutate { container.addBed(bed) }
 
     fun toggleReady(cardId: String) = mutate { container.caseCards.toggleReady(cardId) }
@@ -209,15 +223,44 @@ class CamasViewModel(
     }
 
     /**
-     * Alta: el paciente pasa a DISCHARGED (sale del listado por
-     * [isListedPatient]) y su procedimiento activo se retira de la
-     * pizarra. Antes el procedimiento quedaba huérfano en Propuesto/
-     * Programado y el alta "no sacaba" al paciente de la pizarra.
-     * Sin procedimiento activo, [withdrawFromCard] no hace nada.
+     * Alta de la cama. Primero verifica P1 abiertos: si los hay, NO usa
+     * force=true a ciegas; muestra el diálogo con la lista para confirmación
+     * explícita (A3).
      */
-    fun dischargeBed(patientId: String) = mutate {
-        container.discharge.discharge(patientId, force = true)
-        container.board.withdrawFromCard(patientId)
+    fun dischargeBed(patientId: String) {
+        viewModelScope.launch {
+            try {
+                when (val check = container.discharge.check(patientId)) {
+                    is DischargeUseCase.Check.Ok -> mutate {
+                        container.discharge.discharge(patientId)
+                    }
+                    is DischargeUseCase.Check.BlockedByP1 -> {
+                        val row = _uiState.value.rows.firstOrNull { it.patient.id == patientId }
+                        _uiState.value = _uiState.value.copy(
+                            dischargeConfirm = DischargeConfirm(
+                                patientId = patientId,
+                                patientLabel = row?.let { displayName(it) }
+                                    ?: "Cama ${row?.card?.bed ?: "?"}",
+                                blockingPendings = check.pendings,
+                            ),
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(error = e.message ?: "Error inesperado")
+            }
+        }
+    }
+
+    /** Confirmación explícita del diálogo: solo aquí se usa force=true. */
+    fun confirmDischarge() {
+        val confirm = _uiState.value.dischargeConfirm ?: return
+        _uiState.value = _uiState.value.copy(dischargeConfirm = null)
+        mutate { container.discharge.discharge(confirm.patientId, force = true) }
+    }
+
+    fun dismissDischargeConfirm() {
+        _uiState.value = _uiState.value.copy(dischargeConfirm = null)
     }
 
     /** Borrado total del caso ("se cargó por error"). */

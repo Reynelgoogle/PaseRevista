@@ -7,8 +7,8 @@ import java.time.format.DateTimeFormatter
  * Lógica pura del respaldo local: nombres, retención y sidecar JSON.
  * Sin dependencias de Android: testeable en JVM.
  *
- * Formato de archivo: `respaldo-YYYY-MM-DD-HHmm.db`
- * Sidecar:           `respaldo-YYYY-MM-DD-HHmm.json` (misma carpeta)
+ * Formato de archivo: `respaldo-YYYY-MM-DD-HHmmss.db` (con segundos)
+ * Sidecar:           `respaldo-YYYY-MM-DD-HHmmss.json` (misma carpeta)
  */
 object BackupPolicy {
 
@@ -25,12 +25,16 @@ object BackupPolicy {
     const val AUTO_INTERVAL_MILLIS = 24L * 60 * 60 * 1000
 
     private val fileNameFormatter: DateTimeFormatter =
-        DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmm")
+        DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmmss")
 
+    /**
+     * Acepta el formato actual (con segundos) y el anterior (sin segundos)
+     * para no romper respaldos ya creados.
+     */
     private val fileNameRegex =
-        Regex("""respaldo-(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})\.db""")
+        Regex("""respaldo-(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})(\d{2})?\.db""")
 
-    /** `respaldo-2026-10-06-0615.db`. */
+    /** `respaldo-2026-10-06-061523.db` (con segundos: evita colisiones). */
     fun backupFileName(now: LocalDateTime): String =
         "respaldo-${now.format(fileNameFormatter)}$DB_EXTENSION"
 
@@ -55,6 +59,7 @@ object BackupPolicy {
                 m.groupValues[3].toInt(),
                 m.groupValues[4].toInt(),
                 m.groupValues[5].toInt(),
+                m.groupValues[6].ifEmpty { "0" }.toInt(),
             )
         } catch (e: Exception) {
             null

@@ -84,6 +84,10 @@ enum class BoardColumn(val title: String, val state: ProcedureState) {
 fun Patient.displayName(bed: String?): String =
     fullName?.takeIf { it.isNotBlank() } ?: "Cama ${bed ?: "—"}"
 
+/** Descripción visible del pendiente: la cargada, o aviso si va vacía. */
+fun Pending.displayDescription(): String =
+    description.takeIf { it.isNotBlank() } ?: "(sin descripción)"
+
 /** Jornada: el pase de revista de un día concreto del servicio. */
 data class Journey(
     val id: String,

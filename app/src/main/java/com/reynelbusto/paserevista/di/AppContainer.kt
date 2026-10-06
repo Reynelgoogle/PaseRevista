@@ -6,6 +6,7 @@ import com.reynelbusto.paserevista.BuildConfig
 import com.reynelbusto.paserevista.core.Clock
 import com.reynelbusto.paserevista.core.SystemClock
 import com.reynelbusto.paserevista.data.backup.BackupManager
+import com.reynelbusto.paserevista.data.backup.WalCheckpointResult
 import com.reynelbusto.paserevista.data.local.DATABASE_NAME
 import com.reynelbusto.paserevista.data.local.DatabaseUnitOfWork
 import com.reynelbusto.paserevista.data.local.MIGRATION_1_2
@@ -38,14 +39,10 @@ import com.reynelbusto.paserevista.domain.repository.TreatmentRepository
 import com.reynelbusto.paserevista.domain.usecase.AddBedUseCase
 import com.reynelbusto.paserevista.domain.usecase.BoardUseCase
 import com.reynelbusto.paserevista.domain.usecase.CaseCardUseCase
-import com.reynelbusto.paserevista.domain.usecase.CreateJourneyUseCase
 import com.reynelbusto.paserevista.domain.usecase.CustomFieldUseCase
 import com.reynelbusto.paserevista.domain.usecase.DeleteCaseUseCase
 import com.reynelbusto.paserevista.domain.usecase.DischargeUseCase
 import com.reynelbusto.paserevista.domain.usecase.EnsureDayUseCase
-import com.reynelbusto.paserevista.domain.usecase.GetCurrentJourneyUseCase
-import com.reynelbusto.paserevista.domain.usecase.GetDailyRecordsUseCase
-import com.reynelbusto.paserevista.domain.usecase.GetPatientsUseCase
 import com.reynelbusto.paserevista.domain.usecase.PendingUseCase
 import com.reynelbusto.paserevista.domain.usecase.ProcedureUseCase
 import com.reynelbusto.paserevista.domain.usecase.DeviceUseCase
@@ -123,17 +120,14 @@ class AppContainer(context: Context) {
     val customFields = CustomFieldUseCase(
         unitOfWork, customFieldRepository, caseHistoryRepository, clock,
     )
-    val discharge = DischargeUseCase(unitOfWork, patientRepository, pendingRepository, clock)
+    val discharge = DischargeUseCase(unitOfWork, patientRepository, pendingRepository, procedureRepository, clock)
     val deleteCase = DeleteCaseUseCase(
         unitOfWork, patientRepository, caseCardRepository, customFieldRepository,
-        pendingRepository, procedureRepository,
+        pendingRepository, procedureRepository, dailyRecordRepository,
+        treatmentRepository, deviceRepository, resultRepository,
     )
 
-    // Compatibilidad / módulos
-    val getPatients = GetPatientsUseCase(patientRepository)
-    val getCurrentJourney = GetCurrentJourneyUseCase(journeyRepository, clock)
-    val createJourney = CreateJourneyUseCase(journeyRepository, clock)
-    val getDailyRecords = GetDailyRecordsUseCase(dailyRecordRepository)
+    // Módulos clínicos
     val pendings = PendingUseCase(pendingRepository, clock)
     val treatments = TreatmentUseCase(unitOfWork, treatmentRepository, clock)
     val devices = DeviceUseCase(deviceRepository, clock)
@@ -147,7 +141,14 @@ class AppContainer(context: Context) {
         databaseFile = { context.applicationContext.getDatabasePath(DATABASE_NAME) },
         checkpointWal = {
             database.openHelper.writableDatabase
-                .query("PRAGMA wal_checkpoint(TRUNCATE)").close()
+                .query("PRAGMA wal_checkpoint(TRUNCATE)").use { c ->
+                    c.moveToFirst()
+                    WalCheckpointResult(
+                        busy = c.getInt(0) == 1,
+                        logFrames = c.getInt(1),
+                        checkpointedFrames = c.getInt(2),
+                    )
+                }
         },
         closeDatabase = { closeDatabase() },
         schemaVersion = SCHEMA_VERSION,
