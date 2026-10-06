@@ -69,6 +69,7 @@ private class DelCards(val patientIds: MutableSet<String>) : CaseCardRepository 
     override suspend fun deleteByPatient(patientId: String) {
         patientIds.remove(patientId)
     }
+    override suspend fun recentDiagnoses(limit: Int): List<String> = emptyList()
 }
 
 private class DelFields(val byPatient: MutableMap<String, MutableList<CustomField>>) : CustomFieldRepository {

@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.reynelbusto.paserevista.core.IsoDate
+import com.reynelbusto.paserevista.domain.model.ClinicalOptions
 import com.reynelbusto.paserevista.domain.model.ClinicalPriority
 import com.reynelbusto.paserevista.domain.model.DeviceKind
 import com.reynelbusto.paserevista.domain.model.Patient
@@ -154,13 +155,10 @@ fun AddPendingDialog(
                 PendingTypePicker(type, { type = it })
                 Text("Prioridad", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
                 PriorityPicker(priority, { priority = it })
-                OutlinedTextField(
-                    value = dueDate,
-                    onValueChange = { dueDate = it },
-                    label = { Text("Fecha objetivo (aaaa-mm-dd)") },
-                    placeholder = { Text("Opcional") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
+                DatePickerField(
+                    label = "Fecha objetivo",
+                    isoDate = dueDate.ifBlank { null },
+                    onSelect = { dueDate = it ?: "" },
                 )
                 OutlinedTextField(
                     value = assignee,
@@ -170,12 +168,11 @@ fun AddPendingDialog(
                     singleLine = true,
                 )
                 if (type == PendingType.INTERCONSULTATION) {
-                    OutlinedTextField(
-                        value = serviceDest,
-                        onValueChange = { serviceDest = it },
-                        label = { Text("Servicio destino *") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
+                    OptionField(
+                        label = "Servicio destino",
+                        options = ClinicalOptions.INTERCONSULT_SERVICES,
+                        value = serviceDest.ifBlank { null },
+                        onValueChange = { serviceDest = it ?: "" },
                     )
                     OutlinedTextField(
                         value = note,

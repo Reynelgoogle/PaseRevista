@@ -8,7 +8,6 @@ import java.time.format.DateTimeFormatter
 typealias IsoDate = String
 
 private val ISO: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
-
 /** Reloj abstraído para que el dominio sea testeable sin Android. */
 interface Clock {
     fun nowMillis(): Long
@@ -60,3 +59,21 @@ fun ageAt(birthIso: IsoDate, todayIso: IsoDate): Int {
     if (today.dayOfYear < birth.dayOfYear) age--
     return age.coerceAtLeast(0)
 }
+
+/**
+ * Convierte los millis que devuelve el DatePicker de Material3 a fecha ISO.
+ * El DatePicker entrega la medianoche UTC del día elegido: se interpreta en UTC
+ * (no en la zona local) para no retroceder un día en zonas al oeste de Greenwich.
+ */
+fun isoDateFromPickerMillis(millis: Long): IsoDate =
+    java.time.Instant.ofEpochMilli(millis)
+        .atZone(java.time.ZoneOffset.UTC)
+        .toLocalDate()
+        .format(ISO)
+
+/** Inverso: millis (medianoche UTC) para preseleccionar el DatePicker desde un ISO. */
+fun pickerMillisFromIso(iso: IsoDate): Long =
+    LocalDate.parse(iso, ISO)
+        .atStartOfDay(java.time.ZoneOffset.UTC)
+        .toInstant()
+        .toEpochMilli()

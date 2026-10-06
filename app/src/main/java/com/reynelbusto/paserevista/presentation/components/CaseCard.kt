@@ -3,12 +3,17 @@ package com.reynelbusto.paserevista.presentation.components
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -29,6 +34,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -39,8 +45,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.reynelbusto.paserevista.domain.model.ClinicalOptions
 import com.reynelbusto.paserevista.domain.model.CustomField
+import com.reynelbusto.paserevista.domain.model.Sex
 import com.reynelbusto.paserevista.domain.usecase.CaseCardPatch
 import com.reynelbusto.paserevista.presentation.camas.CardRow
 import com.reynelbusto.paserevista.presentation.theme.TextSecondary
@@ -57,11 +66,13 @@ import java.time.format.DateTimeFormatter
 fun CaseCardView(
     row: CardRow,
     displayName: String,
+    recentDiagnoses: List<String>,
     onToggleReady: () -> Unit,
     onSaveFields: (CaseCardPatch) -> Unit,
     onSavePatientDetails: (
         fullName: String?, hcNumber: String?, bloodGroup: String?,
         address: String?, mainDiagnosis: String?, isOutOfService: Boolean?,
+        sex: Sex?,
     ) -> Unit,
     onAddCustomField: (label: String, value: String) -> Unit,
     onRenameCustomField: (CustomField, String) -> Unit,
@@ -238,6 +249,7 @@ fun CaseCardView(
     if (showEditFields) {
         EditFieldsDialog(
             card = row.card,
+            recentDiagnoses = recentDiagnoses,
             onDismiss = { showEditFields = false },
             onConfirm = { patch -> showEditFields = false; onSaveFields(patch) },
         )
@@ -246,9 +258,9 @@ fun CaseCardView(
         PatientDataDialog(
             patient = row.patient,
             onDismiss = { showPatientData = false },
-            onConfirm = { name, hc, group, addr, dx, out ->
+            onConfirm = { name, hc, group, addr, dx, out, sex ->
                 showPatientData = false
-                onSavePatientDetails(name, hc, group, addr, dx, out)
+                onSavePatientDetails(name, hc, group, addr, dx, out, sex)
             },
         )
     }
@@ -400,37 +412,60 @@ private fun formatDay(millis: Long): String = try {
     ""
 }
 
-/** Edición de los 6 campos de la tarjeta. Todo opcional. */
+/** Edición de los 6 campos de la tarjeta. Todo opcional. Con desplegables + "Otro…". */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun EditFieldsDialog(
     card: com.reynelbusto.paserevista.domain.model.CaseCard,
+    recentDiagnoses: List<String>,
     onDismiss: () -> Unit,
     onConfirm: (CaseCardPatch) -> Unit,
 ) {
     var diagnosis by remember { mutableStateOf(card.diagnosis ?: "") }
-    var procedure by remember { mutableStateOf(card.scheduledProcedure ?: "") }
-    var state by remember { mutableStateOf(card.currentState ?: "") }
-    var antibiotic by remember { mutableStateOf(card.antibiotic ?: "") }
+    var procedure by remember { mutableStateOf(card.scheduledProcedure) }
+    var state by remember { mutableStateOf(card.currentState) }
+    var antibiotic by remember { mutableStateOf(card.antibiotic) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Editar tarjeta — Cama ${card.bed}") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 OutlinedTextField(
                     value = diagnosis, onValueChange = { diagnosis = it },
                     label = { Text("Diagnóstico") },
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
-                    value = procedure, onValueChange = { procedure = it },
-                    label = { Text("Proceder programado") },
+                val suggestions = recentDiagnoses.filter { it.isNotBlank() && it != diagnosis }
+                if (suggestions.isNotEmpty()) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        suggestions.take(6).forEach { s ->
+                            SuggestionChip(
+                                onClick = { diagnosis = s },
+                                label = { Text(s, maxLines = 1) },
+                            )
+                        }
+                    }
+                }
+                OptionField(
+                    label = "Proceder programado",
+                    options = ClinicalOptions.PROCEDURES,
+                    value = procedure,
+                    onValueChange = { procedure = it },
                 )
-                OutlinedTextField(
-                    value = state, onValueChange = { state = it },
-                    label = { Text("Estado actual") },
+                OptionField(
+                    label = "Estado actual",
+                    options = ClinicalOptions.CURRENT_STATES,
+                    value = state,
+                    onValueChange = { state = it },
                 )
-                OutlinedTextField(
-                    value = antibiotic, onValueChange = { antibiotic = it },
-                    label = { Text("Antibiótico") },
+                OptionField(
+                    label = "Antibiótico",
+                    options = ClinicalOptions.ANTIBIOTICS,
+                    value = antibiotic,
+                    onValueChange = { antibiotic = it },
                 )
             }
         },
@@ -439,9 +474,9 @@ fun EditFieldsDialog(
                 onConfirm(
                     CaseCardPatch(
                         diagnosis = diagnosis.ifBlank { null },
-                        scheduledProcedure = procedure.ifBlank { null },
-                        currentState = state.ifBlank { null },
-                        antibiotic = antibiotic.ifBlank { null },
+                        scheduledProcedure = procedure?.ifBlank { null },
+                        currentState = state?.ifBlank { null },
+                        antibiotic = antibiotic?.ifBlank { null },
                         fieldsTouched = setOf(
                             "diagnosis", "scheduledProcedure", "currentState", "antibiotic",
                         ),
@@ -461,38 +496,53 @@ fun PatientDataDialog(
     onConfirm: (
         fullName: String?, hcNumber: String?, bloodGroup: String?,
         address: String?, mainDiagnosis: String?, isOutOfService: Boolean?,
+        sex: Sex?,
     ) -> Unit,
 ) {
     var name by remember { mutableStateOf(patient.fullName ?: "") }
     var hc by remember { mutableStateOf(patient.hcNumber ?: "") }
-    var group by remember { mutableStateOf(patient.bloodGroup ?: "") }
+    var group by remember { mutableStateOf(patient.bloodGroup) }
     var address by remember { mutableStateOf(patient.address ?: "") }
     var dx by remember { mutableStateOf(patient.mainDiagnosis ?: "") }
     var outOfService by remember { mutableStateOf(patient.isOutOfService) }
+    var sex by remember { mutableStateOf(patient.sex) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Datos del paciente") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 OutlinedTextField(
                     value = name, onValueChange = { name = it },
                     label = { Text("Nombre completo (opcional)") },
+                    modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = hc, onValueChange = { hc = it },
                     label = { Text("Historia clínica (opcional)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
                 )
-                OutlinedTextField(
-                    value = group, onValueChange = { group = it },
-                    label = { Text("Grupo sanguíneo (opcional)") },
+                OptionField(
+                    label = "Grupo sanguíneo (opcional)",
+                    options = ClinicalOptions.BLOOD_GROUPS,
+                    value = group,
+                    onValueChange = { group = it },
+                    allowOther = false,
                 )
+                SexSegmentedButton(selected = sex, onSelect = { sex = it })
                 OutlinedTextField(
                     value = address, onValueChange = { address = it },
                     label = { Text("Dirección (opcional)") },
+                    modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = dx, onValueChange = { dx = it },
                     label = { Text("Diagnóstico principal (opcional)") },
+                    modifier = Modifier.fillMaxWidth(),
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Fuera de servicio", modifier = Modifier.weight(1f))
@@ -505,8 +555,8 @@ fun PatientDataDialog(
         confirmButton = {
             Button(onClick = {
                 onConfirm(
-                    name.ifBlank { null }, hc.ifBlank { null }, group.ifBlank { null },
-                    address.ifBlank { null }, dx.ifBlank { null }, outOfService,
+                    name.ifBlank { null }, hc.ifBlank { null }, group,
+                    address.ifBlank { null }, dx.ifBlank { null }, outOfService, sex,
                 )
             }) { Text("Guardar") }
         },

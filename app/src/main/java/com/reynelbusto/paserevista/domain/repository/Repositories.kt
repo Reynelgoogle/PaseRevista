@@ -107,6 +107,8 @@ interface CaseCardRepository {
     /** Conteos para el sidecar del respaldo. */
     suspend fun countAll(): Int
     suspend fun countDistinctBeds(): Int
+    /** Últimos diagnósticos usados (sugerencias al editar la tarjeta). */
+    suspend fun recentDiagnoses(limit: Int = 8): List<String>
 }
 
 /** Apartados personalizados de la tarjeta. */

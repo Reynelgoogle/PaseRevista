@@ -101,6 +101,7 @@ private class CrashCards(private val bedByPatient: Map<String, String>) : CaseCa
     override suspend fun countAll(): Int = 0
     override suspend fun countDistinctBeds(): Int = 0
     override suspend fun deleteByPatient(patientId: String) {}
+    override suspend fun recentDiagnoses(limit: Int): List<String> = emptyList()
 }
 
 private class CrashHistory : CaseHistoryRepository {

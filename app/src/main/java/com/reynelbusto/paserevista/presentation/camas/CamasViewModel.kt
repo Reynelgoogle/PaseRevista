@@ -13,6 +13,7 @@ import com.reynelbusto.paserevista.domain.model.Pending
 import com.reynelbusto.paserevista.domain.model.PendingType
 import com.reynelbusto.paserevista.domain.model.Patient
 import com.reynelbusto.paserevista.domain.model.PatientState
+import com.reynelbusto.paserevista.domain.model.Sex
 import com.reynelbusto.paserevista.domain.model.displayName
 import com.reynelbusto.paserevista.domain.usecase.CardShareData
 import com.reynelbusto.paserevista.domain.usecase.CaseCardPatch
@@ -66,6 +67,8 @@ data class CamasUiState(
     val error: String? = null,
     val rows: List<CardRow> = emptyList(),
     val dateLabel: String = "",
+    /** Últimos diagnósticos usados (sugerencias al editar la tarjeta). */
+    val recentDiagnoses: List<String> = emptyList(),
 )
 
 /**
@@ -114,6 +117,7 @@ class CamasViewModel(
                     isLoading = false,
                     rows = rows,
                     dateLabel = prettyDate(clock.todayIso()),
+                    recentDiagnoses = container.caseCardRepository.recentDiagnoses(8),
                 )
                 CaseWidgetProvider.requestUpdate(appContext)
             } catch (e: Exception) {
@@ -151,9 +155,10 @@ class CamasViewModel(
         address: String?,
         mainDiagnosis: String?,
         isOutOfService: Boolean?,
+        sex: Sex?,
     ) = mutate {
         container.caseCards.updatePatientDetails(
-            patientId, fullName, hcNumber, bloodGroup, address, mainDiagnosis, isOutOfService,
+            patientId, fullName, hcNumber, bloodGroup, address, mainDiagnosis, isOutOfService, sex,
         )
     }
 

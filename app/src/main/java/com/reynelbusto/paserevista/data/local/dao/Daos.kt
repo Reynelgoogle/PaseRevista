@@ -402,6 +402,14 @@ interface CaseCardDao {
 
     @Query("SELECT COUNT(DISTINCT bed) FROM case_card")
     suspend fun countDistinctBeds(): Int
+
+    /** Últimos diagnósticos usados (sugerencias al editar). Sin cambios de esquema. */
+    @Query(
+        """SELECT diagnosis FROM case_card
+           WHERE diagnosis IS NOT NULL AND TRIM(diagnosis) != ''
+           GROUP BY TRIM(diagnosis) ORDER BY MAX(updated_at) DESC LIMIT :limit""",
+    )
+    suspend fun recentDiagnoses(limit: Int): List<String>
 }
 
 @Dao

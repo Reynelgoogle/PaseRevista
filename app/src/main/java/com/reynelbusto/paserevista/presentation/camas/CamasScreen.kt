@@ -131,11 +131,12 @@ fun CamasScreen(container: AppContainer) {
                     CaseCardView(
                         row = row,
                         displayName = vm.displayName(row),
+                        recentDiagnoses = state.recentDiagnoses,
                         onToggleReady = { vm.toggleReady(row.card.id) },
                         onSaveFields = { patch -> vm.saveFields(row.card.id, patch) },
-                        onSavePatientDetails = { name, hc, group, addr, dx, out ->
+                        onSavePatientDetails = { name, hc, group, addr, dx, out, sex ->
                             vm.savePatientDetails(
-                                row.patient.id, name, hc, group, addr, dx, out,
+                                row.patient.id, name, hc, group, addr, dx, out, sex,
                             )
                         },
                         onAddCustomField = { label, value ->

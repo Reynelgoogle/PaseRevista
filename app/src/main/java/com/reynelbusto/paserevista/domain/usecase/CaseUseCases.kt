@@ -11,6 +11,7 @@ import com.reynelbusto.paserevista.domain.model.Patient
 import com.reynelbusto.paserevista.domain.model.PatientState
 import com.reynelbusto.paserevista.domain.model.Procedure
 import com.reynelbusto.paserevista.domain.model.ProcedureState
+import com.reynelbusto.paserevista.domain.model.Sex
 import com.reynelbusto.paserevista.domain.model.displayName
 import com.reynelbusto.paserevista.domain.repository.CaseCardRepository
 import com.reynelbusto.paserevista.domain.repository.CaseHistoryRepository
@@ -197,6 +198,7 @@ class CaseCardUseCase(
         address: String?,
         mainDiagnosis: String?,
         isOutOfService: Boolean?,
+        sex: Sex?,
     ): Patient = unitOfWork.atomic {
         val patient = patients.getPatient(patientId) ?: error("Paciente no encontrado")
         val changes = mutableListOf<String>()
@@ -206,6 +208,9 @@ class CaseCardUseCase(
         if (hcNumber != null && hcNumber.trim() != (patient.hcNumber ?: "")) {
             changes += "HC actualizada"
         }
+        if (sex != patient.sex) {
+            changes += "Sexo: ${patient.sex?.name ?: "—"} → ${sex?.name ?: "—"}"
+        }
         val updated = patient.copy(
             fullName = fullName?.trim()?.ifBlank { null } ?: patient.fullName,
             hcNumber = hcNumber?.trim()?.ifBlank { null } ?: patient.hcNumber,
@@ -213,6 +218,7 @@ class CaseCardUseCase(
             address = address?.trim()?.ifBlank { null } ?: patient.address,
             mainDiagnosis = mainDiagnosis?.trim()?.ifBlank { null } ?: patient.mainDiagnosis,
             isOutOfService = isOutOfService ?: patient.isOutOfService,
+            sex = sex,
         )
         patients.updatePatient(updated)
         if (changes.isNotEmpty()) history.log(patientId, null, changes.joinToString("; "))

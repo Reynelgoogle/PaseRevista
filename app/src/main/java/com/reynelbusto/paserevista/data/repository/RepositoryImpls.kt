@@ -368,6 +368,10 @@ class CaseCardRepositoryImpl(
     override suspend fun countDistinctBeds(): Int = withContext(Dispatchers.IO) {
         dao.countDistinctBeds()
     }
+
+    override suspend fun recentDiagnoses(limit: Int): List<String> = withContext(Dispatchers.IO) {
+        dao.recentDiagnoses(limit)
+    }
 }
 
 class CustomFieldRepositoryImpl(

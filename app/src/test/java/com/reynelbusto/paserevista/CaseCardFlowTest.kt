@@ -119,6 +119,9 @@ private class FakeCards : CaseCardRepository {
     override suspend fun deleteByPatient(patientId: String) {
         store.entries.removeIf { it.value.patientId == patientId }
     }
+
+    override suspend fun recentDiagnoses(limit: Int): List<String> =
+        store.values.mapNotNull { it.diagnosis?.ifBlank { null } }.distinct().take(limit)
 }
 
 private class FakeHistory : CaseHistoryRepository {
