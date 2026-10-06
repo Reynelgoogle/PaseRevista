@@ -1,0 +1,32 @@
+# PaseRevista — .gitignore
+# Higiene: nunca se suben secretos, credenciales ni datos clínicos.
+
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Wrapper (se conserva el .jar y .properties; no los dists descargados)
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.iws
+local.properties
+
+# Keystore y firmas (JAMÁS subir)
+*.jks
+*.keystore
+*.p12
+
+# Datos clínicos / bases de datos locales
+*.db
+*.db-shm
+*.db-wal
+schemas/
+
+# Sistema
+.DS_Store
+Thumbs.db

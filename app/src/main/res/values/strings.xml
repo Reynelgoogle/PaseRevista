@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Nombre provisional: Reynel decidirá el definitivo. Package sin cambios. -->
+    <string name="app_name">Entrega de Guardia</string>
+    <string name="widget_desc">Camas del día con etiquetas Pendiente/Listo</string>
+</resources>
