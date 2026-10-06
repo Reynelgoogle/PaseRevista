@@ -29,6 +29,10 @@ interface PatientDao {
     @Update
     suspend fun update(patient: PatientEntity)
 
+    /** Borrado total del caso ("se cargó por error"). */
+    @Query("DELETE FROM patient WHERE id = :id")
+    suspend fun deleteById(id: String)
+
     @Query("SELECT * FROM patient WHERE id = :id AND deleted_at IS NULL")
     suspend fun getById(id: String): PatientEntity?
 
@@ -196,6 +200,9 @@ interface PendingDao {
     @Update
     suspend fun update(pending: PendingEntity)
 
+    @Query("DELETE FROM `pending` WHERE patient_id = :patientId")
+    suspend fun deleteByPatient(patientId: String)
+
     @Query(
         """SELECT * FROM pending
            WHERE patient_id = :patientId AND status IN ('pending','in_progress')
@@ -319,6 +326,9 @@ interface ProcedureDao {
     @Update
     suspend fun update(procedure: ProcedureEntity)
 
+    @Query("DELETE FROM `procedure` WHERE patient_id = :patientId")
+    suspend fun deleteByPatient(patientId: String)
+
     @Query(
         """SELECT * FROM `procedure`
            WHERE journey_id = :journeyId AND status IN ('pending','preparation')
@@ -361,6 +371,9 @@ interface CaseCardDao {
     @Update
     suspend fun update(card: CaseCardEntity)
 
+    @Query("DELETE FROM case_card WHERE patient_id = :patientId")
+    suspend fun deleteByPatient(patientId: String)
+
     @Query("SELECT * FROM case_card WHERE journey_id = :journeyId ORDER BY bed")
     fun observeByJourney(journeyId: String): Flow<List<CaseCardEntity>>
 
@@ -401,6 +414,9 @@ interface CustomFieldDao {
 
     @Query("DELETE FROM custom_field WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    @Query("DELETE FROM custom_field WHERE patient_id = :patientId")
+    suspend fun deleteByPatient(patientId: String)
 
     @Query(
         """SELECT * FROM custom_field

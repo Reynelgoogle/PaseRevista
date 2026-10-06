@@ -25,6 +25,8 @@ interface PatientRepository {
     suspend fun getActivePatients(serviceId: String): List<Patient>
     /** Anti-duplicados: busca por historia clínica dentro del servicio. */
     suspend fun findByHc(serviceId: String, hcNumber: String): Patient?
+    /** Borrado total del caso ("se cargó por error"). */
+    suspend fun delete(id: String)
 }
 
 interface JourneyRepository {
@@ -57,6 +59,7 @@ interface PendingRepository {
     suspend fun getPending(id: String): Pending?
     suspend fun create(pending: Pending): String
     suspend fun update(pending: Pending)
+    suspend fun deleteByPatient(patientId: String)
 }
 
 interface TreatmentRepository {
@@ -88,6 +91,7 @@ interface ProcedureRepository {
     suspend fun findActiveByPatient(patientId: String): Procedure?
     suspend fun create(procedure: Procedure): String
     suspend fun update(procedure: Procedure)
+    suspend fun deleteByPatient(patientId: String)
 }
 
 /** Tarjetas de cama (pivot entrega de guardia). */
@@ -99,6 +103,7 @@ interface CaseCardRepository {
     suspend fun findLatestByPatient(patientId: String): CaseCard?
     suspend fun create(card: CaseCard): String
     suspend fun update(card: CaseCard)
+    suspend fun deleteByPatient(patientId: String)
     /** Conteos para el sidecar del respaldo. */
     suspend fun countAll(): Int
     suspend fun countDistinctBeds(): Int
@@ -110,6 +115,7 @@ interface CustomFieldRepository {
     suspend fun create(field: CustomField): String
     suspend fun update(field: CustomField)
     suspend fun delete(id: String)
+    suspend fun deleteByPatient(patientId: String)
     suspend fun countByPatient(patientId: String): Int
 }
 

@@ -152,6 +152,7 @@ fun CamasScreen(container: AppContainer) {
                         onCompletePending = { id -> vm.completePending(id) },
                         onDischarge = { vm.dischargeBed(row.patient.id) },
                         onShare = { complete -> shareText(vm.shareCardText(row, complete)) },
+                        onDeleteCase = { vm.deleteCase(row.patient.id) },
                     )
                 }
             }

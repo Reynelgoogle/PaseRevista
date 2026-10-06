@@ -12,6 +12,7 @@ import com.reynelbusto.paserevista.domain.model.CustomField
 import com.reynelbusto.paserevista.domain.model.Pending
 import com.reynelbusto.paserevista.domain.model.PendingType
 import com.reynelbusto.paserevista.domain.model.Patient
+import com.reynelbusto.paserevista.domain.model.PatientState
 import com.reynelbusto.paserevista.domain.model.displayName
 import com.reynelbusto.paserevista.domain.usecase.CardShareData
 import com.reynelbusto.paserevista.domain.usecase.CaseCardPatch
@@ -56,6 +57,10 @@ data class CardRow(
     )
 }
 
+/** Predicado del listado de Camas: solo pacientes activos (el alta saca la tarjeta). */
+internal fun isListedPatient(patient: Patient): Boolean =
+    patient.status == PatientState.ACTIVE
+
 data class CamasUiState(
     val isLoading: Boolean = true,
     val error: String? = null,
@@ -90,6 +95,8 @@ class CamasViewModel(
                 val rows = cards.map { card ->
                     val patient = container.patientRepository.getPatient(card.patientId)
                         ?: return@map null
+                    // BUG 2: el alta saca la tarjeta del listado (el historial se conserva).
+                    if (!isListedPatient(patient)) return@map null
                     CardRow(
                         card = card,
                         patient = patient,
@@ -181,6 +188,11 @@ class CamasViewModel(
 
     fun dischargeBed(patientId: String) = mutate {
         container.discharge.discharge(patientId, force = true)
+    }
+
+    /** Borrado total del caso ("se cargó por error"). */
+    fun deleteCase(patientId: String) = mutate {
+        container.deleteCase.invoke(patientId)
     }
 
     fun clearError() {

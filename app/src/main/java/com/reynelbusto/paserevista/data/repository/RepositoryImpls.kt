@@ -93,6 +93,10 @@ class PatientRepositoryImpl(
             val entity = dao.findByServiceAndHc(serviceId, hcNumber.trim()) ?: return@withContext null
             entity.toDomain(dao.getComorbidities(entity.id))
         }
+
+    override suspend fun delete(id: String) = withContext(Dispatchers.IO) {
+        dao.deleteById(id)
+    }
 }
 
 class JourneyRepositoryImpl(
@@ -210,6 +214,10 @@ class PendingRepositoryImpl(
     override suspend fun update(pending: Pending) = withContext(Dispatchers.IO) {
         dao.update(pending.copy(updatedAt = clock.nowMillis()).toEntity())
     }
+
+    override suspend fun deleteByPatient(patientId: String) = withContext(Dispatchers.IO) {
+        dao.deleteByPatient(patientId)
+    }
 }
 
 class TreatmentRepositoryImpl(
@@ -304,6 +312,10 @@ class ProcedureRepositoryImpl(
     override suspend fun update(procedure: Procedure) = withContext(Dispatchers.IO) {
         dao.update(procedure.copy(updatedAt = clock.nowMillis()).toEntity())
     }
+
+    override suspend fun deleteByPatient(patientId: String) = withContext(Dispatchers.IO) {
+        dao.deleteByPatient(patientId)
+    }
 }
 
 class CaseCardRepositoryImpl(
@@ -345,6 +357,10 @@ class CaseCardRepositoryImpl(
         dao.update(card.copy(updatedAt = clock.nowMillis()).toEntity())
     }
 
+    override suspend fun deleteByPatient(patientId: String) = withContext(Dispatchers.IO) {
+        dao.deleteByPatient(patientId)
+    }
+
     override suspend fun countAll(): Int = withContext(Dispatchers.IO) {
         dao.countAll()
     }
@@ -372,6 +388,10 @@ class CustomFieldRepositoryImpl(
 
     override suspend fun delete(id: String) = withContext(Dispatchers.IO) {
         dao.deleteById(id)
+    }
+
+    override suspend fun deleteByPatient(patientId: String) = withContext(Dispatchers.IO) {
+        dao.deleteByPatient(patientId)
     }
 
     override suspend fun countByPatient(patientId: String): Int = withContext(Dispatchers.IO) {

@@ -60,6 +60,10 @@ private class FakePatients : PatientRepository {
 
     override suspend fun findByHc(serviceId: String, hcNumber: String): Patient? =
         store.values.firstOrNull { it.hcNumber == hcNumber }
+
+    override suspend fun delete(id: String) {
+        store.remove(id)
+    }
 }
 
 private class FakeJourneys(private val clock: Clock) : JourneyRepository {
@@ -111,6 +115,10 @@ private class FakeCards : CaseCardRepository {
 
     override suspend fun countDistinctBeds(): Int =
         store.values.map { it.bed }.distinct().size
+
+    override suspend fun deleteByPatient(patientId: String) {
+        store.entries.removeIf { it.value.patientId == patientId }
+    }
 }
 
 private class FakeHistory : CaseHistoryRepository {
@@ -148,6 +156,10 @@ private class FakeProcedures : ProcedureRepository {
 
     override suspend fun update(procedure: Procedure) {
         store[procedure.id] = procedure
+    }
+
+    override suspend fun deleteByPatient(patientId: String) {
+        store.entries.removeIf { it.value.patientId == patientId }
     }
 }
 

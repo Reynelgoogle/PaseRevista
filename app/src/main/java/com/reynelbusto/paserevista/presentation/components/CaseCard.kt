@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -70,6 +71,7 @@ fun CaseCardView(
     onCompletePending: (String) -> Unit,
     onDischarge: () -> Unit,
     onShare: (complete: Boolean) -> Unit,
+    onDeleteCase: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val card = row.card
@@ -81,6 +83,7 @@ fun CaseCardView(
     var showShareChoice by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var showDischarge by remember { mutableStateOf(false) }
+    var showDeleteCase by remember { mutableStateOf(false) }
     var renameField by remember { mutableStateOf<CustomField?>(null) }
 
     Card(
@@ -121,6 +124,15 @@ fun CaseCardView(
                     DropdownMenuItem(
                         text = { Text("Dar de alta") },
                         onClick = { showMenu = false; showDischarge = true },
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                "Borrar tarjeta",
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        },
+                        onClick = { showMenu = false; showDeleteCase = true },
                     )
                 }
             }
@@ -339,6 +351,30 @@ fun CaseCardView(
             },
             dismissButton = {
                 TextButton(onClick = { showDischarge = false }) { Text("Cancelar") }
+            },
+        )
+    }
+    if (showDeleteCase) {
+        AlertDialog(
+            onDismissRequest = { showDeleteCase = false },
+            title = { Text("Borrar tarjeta") },
+            text = {
+                Text(
+                    "Se eliminará por completo el caso de la cama ${card.bed} " +
+                        "(tarjeta, paciente, apartados, pendientes y procedimientos). " +
+                        "Esta acción es permanente.",
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showDeleteCase = false; onDeleteCase() },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) { Text("Borrar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteCase = false }) { Text("Cancelar") }
             },
         )
     }

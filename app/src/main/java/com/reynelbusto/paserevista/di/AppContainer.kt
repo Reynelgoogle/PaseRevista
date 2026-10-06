@@ -40,6 +40,7 @@ import com.reynelbusto.paserevista.domain.usecase.BoardUseCase
 import com.reynelbusto.paserevista.domain.usecase.CaseCardUseCase
 import com.reynelbusto.paserevista.domain.usecase.CreateJourneyUseCase
 import com.reynelbusto.paserevista.domain.usecase.CustomFieldUseCase
+import com.reynelbusto.paserevista.domain.usecase.DeleteCaseUseCase
 import com.reynelbusto.paserevista.domain.usecase.DischargeUseCase
 import com.reynelbusto.paserevista.domain.usecase.EnsureDayUseCase
 import com.reynelbusto.paserevista.domain.usecase.GetCurrentJourneyUseCase
@@ -123,6 +124,10 @@ class AppContainer(context: Context) {
         unitOfWork, customFieldRepository, caseHistoryRepository, clock,
     )
     val discharge = DischargeUseCase(unitOfWork, patientRepository, pendingRepository, clock)
+    val deleteCase = DeleteCaseUseCase(
+        unitOfWork, patientRepository, caseCardRepository, customFieldRepository,
+        pendingRepository, procedureRepository,
+    )
 
     // Compatibilidad / módulos
     val getPatients = GetPatientsUseCase(patientRepository)

@@ -10,6 +10,7 @@ import com.reynelbusto.paserevista.domain.usecase.BoardUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 data class BoardUiState(
@@ -32,14 +33,22 @@ class BoardViewModel(private val board: BoardUseCase) : ViewModel() {
     init {
         viewModelScope.launch {
             board.observeBoard()
+                .map { procedures ->
+                    // Blindaje: cada ítem se enriquece aislado; si uno falla
+                    // (dato corrupto, mapeo), se omite sin tumbar la pizarra.
+                    procedures.mapNotNull { proc ->
+                        runCatching { board.enrich(proc) }.getOrNull()
+                    }
+                }
                 .catch { _uiState.value = BoardUiState(isLoading = false, error = "No se pudo cargar la pizarra.") }
-                .collect { procedures ->
-                    val items = procedures.map { board.enrich(it) }
+                .collect { items ->
+                    // columnOf es total: agrupa por columna; los no mapeados se omiten.
+                    val byColumn = items.groupBy { board.columnOf(it.procedure) }
                     _uiState.value = BoardUiState(
                         isLoading = false,
-                        proposed = items.filter { board.columnOf(it.procedure) == BoardColumn.PROPOSED },
-                        scheduled = items.filter { board.columnOf(it.procedure) == BoardColumn.SCHEDULED },
-                        done = items.filter { board.columnOf(it.procedure) == BoardColumn.DONE },
+                        proposed = byColumn[BoardColumn.PROPOSED].orEmpty(),
+                        scheduled = byColumn[BoardColumn.SCHEDULED].orEmpty(),
+                        done = byColumn[BoardColumn.DONE].orEmpty(),
                     )
                 }
         }

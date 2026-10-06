@@ -220,6 +220,30 @@ class CaseCardUseCase(
     }
 }
 
+/**
+ * Borrado total de un caso ("esto se cargó por error"): elimina tarjetas,
+ * paciente, apartados personalizados, pendientes y procedimientos del
+ * paciente en UNA transacción. Sin el paciente, la herencia de jornada
+ * no puede resucitar el caso; sin el procedimiento, no queda fantasma
+ * en la pizarra. El historial se conserva como auditoría.
+ */
+class DeleteCaseUseCase(
+    private val unitOfWork: ClinicalUnitOfWork,
+    private val patients: PatientRepository,
+    private val cards: CaseCardRepository,
+    private val fields: CustomFieldRepository,
+    private val pendings: PendingRepository,
+    private val procedures: ProcedureRepository,
+) {
+    suspend fun invoke(patientId: String) = unitOfWork.atomic {
+        procedures.deleteByPatient(patientId)
+        pendings.deleteByPatient(patientId)
+        fields.deleteByPatient(patientId)
+        cards.deleteByPatient(patientId)
+        patients.delete(patientId)
+    }
+}
+
 /** Apartados personalizados ("＋ Apartado"): nombre libre, renombrables. */
 class CustomFieldUseCase(
     private val unitOfWork: ClinicalUnitOfWork,
@@ -300,8 +324,13 @@ class BoardUseCase(
         )
     }
 
-    fun columnOf(procedure: Procedure): BoardColumn =
-        BoardColumn.entries.first { it.state == procedure.status }
+    /**
+     * Columna Kanban de un procedimiento. TOTAL: estados no mapeados
+     * (p. ej. CANCELED) devuelven null — el pipeline los omite,
+     * nunca lanza, nunca tumba la app.
+     */
+    fun columnOf(procedure: Procedure): BoardColumn? =
+        BoardColumn.entries.firstOrNull { it.state == procedure.status }
 
     /** La tarjeta marcada Listo asegura su procedimiento en Propuesto. */
     suspend fun ensureFromCard(card: CaseCard) = unitOfWork.atomic {
