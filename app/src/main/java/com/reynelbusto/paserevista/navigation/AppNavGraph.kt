@@ -39,7 +39,11 @@ private val BOTTOM_DESTINATIONS = listOf(
 
 /** Navegación principal: 3 destinos con barra inferior Material 3. */
 @Composable
-fun AppNavGraph(container: AppContainer) {
+fun AppNavGraph(
+    container: AppContainer,
+    /** Deep link del widget rápido: esta tarjeta arranca expandida. */
+    initialExpandedCardId: String? = null,
+) {
     val navController = rememberNavController()
     Scaffold(
         bottomBar = {
@@ -71,7 +75,12 @@ fun AppNavGraph(container: AppContainer) {
             startDestination = Routes.CAMAS,
             modifier = Modifier.padding(padding),
         ) {
-            composable(Routes.CAMAS) { CamasScreen(container = container) }
+            composable(Routes.CAMAS) {
+                CamasScreen(
+                    container = container,
+                    initialExpandedCardId = initialExpandedCardId,
+                )
+            }
             composable(Routes.BOARD) { BoardScreen(container = container) }
             composable(Routes.MORE) { MoreScreen(container = container) }
         }

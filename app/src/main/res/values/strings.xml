@@ -3,4 +3,5 @@
     <!-- Nombre provisional: Reynel decidirá el definitivo. Package sin cambios. -->
     <string name="app_name">Entrega de Guardia</string>
     <string name="widget_desc">Camas del día con etiquetas Pendiente/Listo</string>
+    <string name="quick_widget_desc">Guardia rápida: check de un toque y entrada veloz</string>
 </resources>

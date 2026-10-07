@@ -52,6 +52,41 @@
             android:excludeFromRecents="true"
             android:noHistory="true" />
 
+        <!-- Widget 2: "Guardia rápida" estilo Todoist (check de un toque + entrada rápida). -->
+        <receiver
+            android:name=".widget.QuickWidgetProvider"
+            android:exported="false"
+            android:label="Guardia rápida">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/quick_widget_info" />
+        </receiver>
+
+        <service
+            android:name=".widget.QuickWidgetService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+
+        <!-- Toques de las filas del widget rápido (check / detalle). -->
+        <receiver
+            android:name=".widget.WidgetActionReceiver"
+            android:exported="false" />
+
+        <!-- Overlays translúcidos de entrada rápida y detalle rápido. -->
+        <activity
+            android:name=".widget.QuickAddActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true" />
+        <activity
+            android:name=".widget.QuickDetailActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true" />
+
         <!-- Respaldo local: compartir el .db en Android < 10 (FileProvider). -->
         <provider
             android:name="androidx.core.content.FileProvider"

@@ -52,7 +52,11 @@ import com.reynelbusto.paserevista.presentation.theme.TextSecondary
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CamasScreen(container: AppContainer) {
+fun CamasScreen(
+    container: AppContainer,
+    /** Deep link: esta tarjeta arranca expandida (viene del widget rápido). */
+    initialExpandedCardId: String? = null,
+) {
     val context = LocalContext.current
     val vm: CamasViewModel = viewModel(factory = CamasViewModel.Factory(container, context))
     val state by vm.uiState.collectAsState()
@@ -147,6 +151,7 @@ fun CamasScreen(container: AppContainer) {
                             row = row,
                             displayName = vm.displayName(row),
                             recentDiagnoses = state.recentDiagnoses,
+                            initiallyExpanded = row.card.id == initialExpandedCardId,
                             onToggleReady = { vm.toggleReady(row.card.id) },
                             onSaveFields = { patch -> vm.saveFields(row.card.id, patch) },
                             onSavePatientDetails = { name, hc, group, addr, dx, out, sex ->

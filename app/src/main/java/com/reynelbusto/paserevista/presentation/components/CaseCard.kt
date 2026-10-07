@@ -95,6 +95,8 @@ fun CaseCardView(
     onShare: (complete: Boolean) -> Unit,
     onDeleteCase: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Deep link del widget rápido: arranca expandida. */
+    initiallyExpanded: Boolean = false,
 ) {
     val card = row.card
     var showPatientData by remember { mutableStateOf(false) }
@@ -107,7 +109,7 @@ fun CaseCardView(
     var showDischarge by remember { mutableStateOf(false) }
     var showDeleteCase by remember { mutableStateOf(false) }
     var renameField by remember { mutableStateOf<CustomField?>(null) }
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(initiallyExpanded) }
 
     val accent = if (card.ready) ClinicalStable else ClinicalCritical
     if (expanded) {
