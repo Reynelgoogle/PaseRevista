@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.reynelbusto.paserevista.core.IsoDate
+import com.reynelbusto.paserevista.domain.model.ClinicalOptions
 import com.reynelbusto.paserevista.domain.model.ClinicalPriority
 import com.reynelbusto.paserevista.domain.model.DeviceKind
 import com.reynelbusto.paserevista.domain.model.Patient
@@ -51,7 +52,7 @@ fun PatientPicker(
         modifier = modifier,
     ) {
         OutlinedTextField(
-            value = selected?.fullName ?: "",
+            value = selected?.fullName ?: "Sin nombre",
             onValueChange = {},
             readOnly = true,
             label = { Text("Paciente") },
@@ -61,7 +62,7 @@ fun PatientPicker(
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             patients.forEach { p ->
                 DropdownMenuItem(
-                    text = { Text(p.fullName) },
+                    text = { Text(p.fullName ?: "Sin nombre") },
                     onClick = { onSelect(p.id); expanded = false },
                 )
             }
@@ -130,7 +131,7 @@ fun AddPendingDialog(
     var assignee by remember { mutableStateOf("") }
     var serviceDest by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
-    val valid = patientId != null && description.isNotBlank() &&
+    val valid = patientId != null &&
         (type != PendingType.INTERCONSULTATION || serviceDest.isNotBlank())
 
     AlertDialog(
@@ -147,20 +148,17 @@ fun AddPendingDialog(
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
-                    label = { Text("Descripción *") },
+                    label = { Text("Descripción (opcional)") },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Text("Tipo", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
                 PendingTypePicker(type, { type = it })
                 Text("Prioridad", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
                 PriorityPicker(priority, { priority = it })
-                OutlinedTextField(
-                    value = dueDate,
-                    onValueChange = { dueDate = it },
-                    label = { Text("Fecha objetivo (aaaa-mm-dd)") },
-                    placeholder = { Text("Opcional") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
+                DatePickerField(
+                    label = "Fecha objetivo",
+                    isoDate = dueDate.ifBlank { null },
+                    onSelect = { dueDate = it ?: "" },
                 )
                 OutlinedTextField(
                     value = assignee,
@@ -170,12 +168,11 @@ fun AddPendingDialog(
                     singleLine = true,
                 )
                 if (type == PendingType.INTERCONSULTATION) {
-                    OutlinedTextField(
-                        value = serviceDest,
-                        onValueChange = { serviceDest = it },
-                        label = { Text("Servicio destino *") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
+                    OptionField(
+                        label = "Servicio destino",
+                        options = ClinicalOptions.INTERCONSULT_SERVICES,
+                        value = serviceDest.ifBlank { null },
+                        onValueChange = { serviceDest = it ?: "" },
                     )
                     OutlinedTextField(
                         value = note,

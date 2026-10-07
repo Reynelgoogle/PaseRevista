@@ -1,6 +1,12 @@
 package com.reynelbusto.paserevista.data.repository
 
+import com.reynelbusto.paserevista.data.local.entity.CaseCardEntity
+import com.reynelbusto.paserevista.data.local.entity.CaseHistoryEntity
+import com.reynelbusto.paserevista.data.local.entity.CustomFieldEntity
 import com.reynelbusto.paserevista.data.local.entity.DailyRecordEntity
+import com.reynelbusto.paserevista.domain.model.CaseCard
+import com.reynelbusto.paserevista.domain.model.CaseHistoryEntry
+import com.reynelbusto.paserevista.domain.model.CustomField
 import com.reynelbusto.paserevista.data.local.entity.DeviceEntity
 import com.reynelbusto.paserevista.data.local.entity.JourneyEntity
 import com.reynelbusto.paserevista.data.local.entity.PatientEntity
@@ -64,15 +70,16 @@ private fun String.toProcedureState(): ProcedureState =
 
 internal fun PatientEntity.toDomain(comorbidities: List<String> = emptyList()): Patient = Patient(
     id = id,
-    fullName = fullName,
-    birthDate = birthDate,
-    sex = sex.toSex(),
-    hcNumber = hcNumber,
+    fullName = fullName?.ifBlank { null },
+    birthDate = birthDate?.ifBlank { null },
+    sex = sex?.let { s -> Sex.entries.firstOrNull { it.code == s } },
+    hcNumber = hcNumber?.ifBlank { null },
     bloodGroup = bloodGroup,
+    address = address?.ifBlank { null },
     serviceId = serviceId,
     admissionDate = admissionDate,
     admissionReason = admissionReason,
-    mainDiagnosis = mainDiagnosis,
+    mainDiagnosis = mainDiagnosis?.ifBlank { null },
     comorbidities = comorbidities,
     status = status.toPatientState(),
     dischargeDate = dischargeDate,
@@ -87,9 +94,10 @@ internal fun Patient.toEntity(): PatientEntity = PatientEntity(
     id = id,
     fullName = fullName,
     birthDate = birthDate,
-    sex = sex.code,
+    sex = sex?.code,
     hcNumber = hcNumber,
     bloodGroup = bloodGroup,
+    address = address,
     serviceId = serviceId,
     admissionDate = admissionDate,
     admissionReason = admissionReason,
@@ -102,6 +110,62 @@ internal fun Patient.toEntity(): PatientEntity = PatientEntity(
     createdAt = createdAt,
     updatedAt = updatedAt,
     deletedAt = null,
+)
+
+internal fun CaseCardEntity.toDomain(): CaseCard = CaseCard(
+    id = id,
+    patientId = patientId,
+    journeyId = journeyId,
+    bed = bed,
+    diagnosis = diagnosis,
+    scheduledProcedure = scheduledProcedure,
+    currentState = currentState,
+    antibiotic = antibiotic,
+    ready = ready,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
+)
+
+internal fun CaseCard.toEntity(): CaseCardEntity = CaseCardEntity(
+    id = id,
+    patientId = patientId,
+    journeyId = journeyId,
+    bed = bed,
+    diagnosis = diagnosis,
+    scheduledProcedure = scheduledProcedure,
+    currentState = currentState,
+    antibiotic = antibiotic,
+    ready = ready,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
+)
+
+internal fun CustomFieldEntity.toDomain(): CustomField = CustomField(
+    id = id,
+    patientId = patientId,
+    label = label,
+    value = value,
+    sortOrder = sortOrder,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
+)
+
+internal fun CustomField.toEntity(): CustomFieldEntity = CustomFieldEntity(
+    id = id,
+    patientId = patientId,
+    label = label,
+    value = value,
+    sortOrder = sortOrder,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
+)
+
+internal fun CaseHistoryEntity.toDomain(): CaseHistoryEntry = CaseHistoryEntry(
+    id = id,
+    patientId = patientId,
+    journeyId = journeyId,
+    occurredAt = occurredAt,
+    summary = summary,
 )
 
 internal fun JourneyEntity.toDomain(): Journey = Journey(

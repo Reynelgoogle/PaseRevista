@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Respaldo local: exponer el .db de Documents/EntregaGuardia/ en Android < 10. -->
+<paths>
+    <external-path name="documents" path="Documents/EntregaGuardia/" />
+</paths>

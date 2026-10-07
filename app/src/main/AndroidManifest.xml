@@ -4,6 +4,11 @@
 
     <!-- PaseRevista es 100% offline: sin permiso de INTERNET en v1. -->
 
+    <!-- Respaldo local: en Android < 10 la carpeta pública necesita este permiso. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
     <application
         android:name=".PaseRevistaApp"
         android:allowBackup="false"
@@ -21,5 +26,41 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Widget: lista de camas del día con botón Compartir. -->
+        <receiver
+            android:name=".widget.CaseWidgetProvider"
+            android:exported="false"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/case_widget_info" />
+        </receiver>
+
+        <service
+            android:name=".widget.CaseWidgetService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+
+        <!-- Transparente: el widget la usa para lanzar el Sharesheet. -->
+        <activity
+            android:name=".widget.ShareDispatcherActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true" />
+
+        <!-- Respaldo local: compartir el .db en Android < 10 (FileProvider). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

@@ -2,18 +2,16 @@ package com.reynelbusto.paserevista.domain.usecase
 
 import com.reynelbusto.paserevista.core.Clock
 import com.reynelbusto.paserevista.core.IsoDate
-import com.reynelbusto.paserevista.core.newId
 import com.reynelbusto.paserevista.domain.TransitionGuard
 import com.reynelbusto.paserevista.domain.model.ClinicalPriority
-import com.reynelbusto.paserevista.domain.model.DailyRecord
 import com.reynelbusto.paserevista.domain.model.Patient
 import com.reynelbusto.paserevista.domain.model.PatientState
 import com.reynelbusto.paserevista.domain.model.Pending
+import com.reynelbusto.paserevista.domain.model.ProcedureState
 import com.reynelbusto.paserevista.domain.repository.ClinicalUnitOfWork
-import com.reynelbusto.paserevista.domain.repository.DailyRecordRepository
-import com.reynelbusto.paserevista.domain.repository.JourneyRepository
 import com.reynelbusto.paserevista.domain.repository.PatientRepository
 import com.reynelbusto.paserevista.domain.repository.PendingRepository
+import com.reynelbusto.paserevista.domain.repository.ProcedureRepository
 
 /**
  * FASE 6 — Alta hospitalaria ("Alta" = solo egreso, nunca otro concepto).
@@ -29,6 +27,7 @@ class DischargeUseCase(
     private val unitOfWork: ClinicalUnitOfWork,
     private val patients: PatientRepository,
     private val pendings: PendingRepository,
+    private val procedures: ProcedureRepository,
     private val clock: Clock,
 ) {
     sealed interface Check {
@@ -63,6 +62,19 @@ class DischargeUseCase(
         check(force || p1.isEmpty()) {
             "Alta bloqueada: hay ${p1.size} pendiente(s) P1 abierto(s)"
         }
+        // M1: el alta retira también el procedimiento activo (si no, queda
+        // fantasma en la pizarra Kanban).
+        val activeProcedure = procedures.findActiveByPatient(patientId)
+        if (activeProcedure != null &&
+            TransitionGuard.procedure(activeProcedure.status, ProcedureState.CANCELED)
+        ) {
+            procedures.update(
+                activeProcedure.copy(
+                    status = ProcedureState.CANCELED,
+                    updatedAt = clock.nowMillis(),
+                ),
+            )
+        }
         val updated = patient.copy(
             status = PatientState.DISCHARGED,
             dischargeDate = dischargeDate,
@@ -72,58 +84,4 @@ class DischargeUseCase(
         updated
     }
 
-    /** Traslado a otro servicio: mismo Patient, historia intacta. */
-    suspend fun transfer(patientId: String, toServiceId: String): Patient = unitOfWork.atomic {
-        val patient = patients.getPatient(patientId) ?: error("Paciente no encontrado")
-        check(TransitionGuard.patient(patient.status, PatientState.TRANSFERRED)) {
-            "El paciente no admite traslado desde ${patient.status}"
-        }
-        val updated = patient.copy(status = PatientState.TRANSFERRED, serviceId = toServiceId)
-        patients.updatePatient(updated)
-        updated
-    }
-
-    /**
-     * Readmisión: nuevo episodio enlazado con previousEpisodeId, sin duplicar
-     * la identidad del paciente. El episodio anterior debe estar cerrado
-     * (alta/traslado) antes de readmitir.
-     */
-    suspend fun readmit(
-        previousPatientId: String,
-        newPatient: Patient,
-        bed: String?,
-        journeys: JourneyRepository,
-        records: DailyRecordRepository,
-    ): String = unitOfWork.atomic {
-        val previous = patients.getPatient(previousPatientId)
-            ?: error("Episodio anterior no encontrado")
-        check(previous.status != PatientState.ACTIVE) {
-            "El episodio anterior sigue activo: dale alta o trasládalo primero"
-        }
-        val linked = newPatient.copy(
-            id = newId(),
-            status = PatientState.ACTIVE,
-            dischargeDate = null,
-            dischargeReason = null,
-            previousEpisodeId = previousPatientId,
-        )
-        patients.createPatient(linked)
-        val journey = journeys.getOrCreateJourney(
-            linked.serviceId,
-            clock.todayIso(),
-            com.reynelbusto.paserevista.domain.model.JourneyOrigin.AUTO.code,
-        )
-        val now = clock.nowMillis()
-        records.create(
-            DailyRecord(
-                id = newId(),
-                patientId = linked.id,
-                journeyId = journey.id,
-                bed = bed,
-                createdAt = now,
-                updatedAt = now,
-            ),
-        )
-        linked.id
-    }
 }

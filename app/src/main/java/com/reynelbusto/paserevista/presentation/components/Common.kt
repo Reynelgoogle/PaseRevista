@@ -15,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.reynelbusto.paserevista.domain.model.ClinicalPriority
-import com.reynelbusto.paserevista.domain.model.ReviewState
 import com.reynelbusto.paserevista.presentation.theme.PriorityP1
 import com.reynelbusto.paserevista.presentation.theme.PriorityP2
 import com.reynelbusto.paserevista.presentation.theme.PriorityP3
@@ -67,25 +66,27 @@ fun EmptyState(
 }
 
 /**
- * Badge de revisión: ○ Pendiente · ◐ En curso · ✓ Revisado.
- * Nunca ✓ por solo abrir: lo decide el estado del DailyRecord.
+ * Etiqueta de la tarjeta: PENDIENTE / LISTO.
+ * Listo ⇒ la tarjeta sube a la pizarra Kanban.
  */
 @Composable
-fun ReviewBadge(state: ReviewState, modifier: Modifier = Modifier) {
-    val (symbol, color) = when (state) {
-        ReviewState.PENDING -> "○" to TextSecondary
-        ReviewState.IN_PROGRESS -> "◐" to PriorityP2
-        // Verde "estable" para revisado: el pase de ese paciente quedó registrado.
-        ReviewState.COMPLETED -> "✓" to com.reynelbusto.paserevista.presentation.theme.ClinicalStable
+fun ReadyTag(ready: Boolean, modifier: Modifier = Modifier) {
+    val (label, color) = if (ready) {
+        "LISTO" to com.reynelbusto.paserevista.presentation.theme.ClinicalStable
+    } else {
+        "PENDIENTE" to PriorityP2
     }
-    Box(
-        modifier = modifier
-            .size(28.dp)
-            .clip(CircleShape)
-            .background(color.copy(alpha = 0.14f)),
-        contentAlignment = Alignment.Center,
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.small,
+        color = color.copy(alpha = 0.16f),
     ) {
-        Text(text = symbol, color = color, fontSize = 16.sp)
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = color,
+        )
     }
 }
 

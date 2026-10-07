@@ -3,7 +3,6 @@ package com.reynelbusto.paserevista.presentation.board
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,21 +11,20 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,205 +36,161 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.reynelbusto.paserevista.di.AppContainer
-import com.reynelbusto.paserevista.domain.model.ProcedureState
-import com.reynelbusto.paserevista.presentation.components.AddProcedureDialog
+import com.reynelbusto.paserevista.domain.model.BoardColumn
+import com.reynelbusto.paserevista.domain.usecase.BoardItem
 import com.reynelbusto.paserevista.presentation.components.EmptyState
-import com.reynelbusto.paserevista.presentation.components.PriorityChip
 import com.reynelbusto.paserevista.presentation.theme.TextSecondary
 
 /**
- * FASE 8 — Pizarra quirúrgica: kanban PENDIENTES | PREPARACIÓN
- * (+ REALIZADOS en tablet). Misma entidad Procedure en todas las columnas.
+ * Pizarra quirúrgica Kanban: Propuesto → Programado → Realizado.
+ * Las tarjetas marcadas Listo en Camas llegan aquí solas.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BoardScreen(container: AppContainer, onOpenPatient: (String) -> Unit) {
+fun BoardScreen(container: AppContainer) {
     val vm: BoardViewModel = viewModel(factory = BoardViewModel.Factory(container))
     val state by vm.uiState.collectAsState()
-    var showAdd by remember { mutableStateOf(false) }
+    val snackbar = remember { SnackbarHostState() }
+
+    val error = state.error
+    if (error != null) {
+        LaunchedEffect(error) {
+            snackbar.showSnackbar(error)
+            vm.clearError()
+        }
+    }
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Pizarra quirúrgica") }) },
-        floatingActionButton = {
-            FloatingActionButton(onClick = { showAdd = true }) {
-                Icon(Icons.Filled.Add, contentDescription = "Agendar procedimiento")
-            }
-        },
+        snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         when {
-            state.isLoading -> LoadingBoard(Modifier.padding(padding))
-            state.journey == null -> EmptyState(
-                title = "Sin jornada hoy",
-                message = "Cree la jornada del día desde Hoy para usar la pizarra.",
+            state.isLoading -> Column(
+                Modifier
+                    .padding(padding)
+                    .fillMaxSize(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) { CircularProgressIndicator() }
+
+            // M7: fallo de carga → error con Reintentar (no "Pizarra vacía" engañosa).
+            state.loadError != null -> EmptyState(
+                title = "No se pudo cargar",
+                message = state.loadError ?: "Error al cargar",
+                actionLabel = "Reintentar",
+                onAction = { vm.retry() },
                 modifier = Modifier.padding(padding).fillMaxSize(),
             )
+
             else -> BoardContent(
                 state = state,
-                onToPreparation = vm::toPreparation,
-                onPerform = vm::perform,
-                onCancel = vm::cancel,
-                onOpenPatient = onOpenPatient,
+                onMove = vm::moveTo,
                 modifier = Modifier.padding(padding),
             )
         }
     }
-
-    if (showAdd) {
-        AddProcedureDialog(
-            patients = state.patients,
-            preselectedPatientId = null,
-            defaultDate = state.journey?.clinicalDate ?: "",
-            onDismiss = { showAdd = false },
-            onConfirm = { form -> vm.schedule(form); showAdd = false },
-        )
-    }
-}
-
-@Composable
-private fun LoadingBoard(modifier: Modifier = Modifier) {
-    Column(
-        modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) { CircularProgressIndicator() }
 }
 
 @Composable
 private fun BoardContent(
     state: BoardUiState,
-    onToPreparation: (String) -> Unit,
-    onPerform: (String) -> Unit,
-    onCancel: (String) -> Unit,
-    onOpenPatient: (String) -> Unit,
+    onMove: (String, BoardColumn) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val total = state.pending.size + state.preparation.size + state.performed.size
+    val total = state.proposed.size + state.scheduled.size + state.done.size
     if (total == 0) {
         EmptyState(
             title = "Pizarra vacía",
-            message = "Agende procedimientos para la jornada con el botón +.",
+            message = "Marque Listo en una tarjeta de Camas y aparecerá aquí, en Propuesto.",
             modifier = modifier.fillMaxSize(),
         )
         return
     }
-    // Responsive: 3 columnas en tablet, 2 en teléfono (+ realizados colapsable).
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val wide = maxWidth > 600.dp
         if (wide) {
             Row(
-                modifier = Modifier.fillMaxSize().padding(12.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                BoardColumn(
-                    title = "Pendientes",
-                    items = state.pending,
-                    onToPreparation = onToPreparation,
-                    onPerform = onPerform,
-                    onCancel = onCancel,
-                    onOpenPatient = onOpenPatient,
+                BoardColumnView(
+                    column = BoardColumn.PROPOSED,
+                    items = state.proposed,
+                    onMove = onMove,
                     modifier = Modifier.weight(1f),
+                    scrollable = true,
                 )
-                BoardColumn(
-                    title = "Preparación",
-                    items = state.preparation,
-                    onToPreparation = onToPreparation,
-                    onPerform = onPerform,
-                    onCancel = onCancel,
-                    onOpenPatient = onOpenPatient,
+                BoardColumnView(
+                    column = BoardColumn.SCHEDULED,
+                    items = state.scheduled,
+                    onMove = onMove,
                     modifier = Modifier.weight(1f),
+                    scrollable = true,
                 )
-                BoardColumn(
-                    title = "Realizados",
-                    items = state.performed,
-                    onToPreparation = onToPreparation,
-                    onPerform = onPerform,
-                    onCancel = onCancel,
-                    onOpenPatient = onOpenPatient,
+                BoardColumnView(
+                    column = BoardColumn.DONE,
+                    items = state.done,
+                    onMove = onMove,
                     modifier = Modifier.weight(1f),
+                    scrollable = true,
                 )
             }
         } else {
-            Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.weight(1f)) {
-                    BoardColumn(
-                        title = "Pendientes",
-                        items = state.pending,
-                        onToPreparation = onToPreparation,
-                        onPerform = onPerform,
-                        onCancel = onCancel,
-                        onOpenPatient = onOpenPatient,
-                        modifier = Modifier.weight(1f),
-                    )
-                    BoardColumn(
-                        title = "Preparación",
-                        items = state.preparation,
-                        onToPreparation = onToPreparation,
-                        onPerform = onPerform,
-                        onCancel = onCancel,
-                        onOpenPatient = onOpenPatient,
-                        modifier = Modifier.weight(1f),
+            // Teléfono: columnas apiladas con secciones colapsables.
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item {
+                    BoardColumnView(
+                        column = BoardColumn.PROPOSED,
+                        items = state.proposed,
+                        onMove = onMove,
+                        modifier = Modifier.fillMaxWidth(),
+                        scrollable = false,
                     )
                 }
-                PerformedSection(
-                    items = state.performed,
-                    onOpenPatient = onOpenPatient,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun BoardColumn(
-    title: String,
-    items: List<ProcedureWithPatient>,
-    onToPreparation: (String) -> Unit,
-    onPerform: (String) -> Unit,
-    onCancel: (String) -> Unit,
-    onOpenPatient: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            "$title (${items.size})",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
-            items(items, key = { it.procedure.id }) { item ->
-                ProcedureCard(
-                    item = item,
-                    onToPreparation = { onToPreparation(item.procedure.id) },
-                    onPerform = { onPerform(item.procedure.id) },
-                    onCancel = { onCancel(item.procedure.id) },
-                    onOpenPatient = { onOpenPatient(item.procedure.patientId) },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PerformedSection(items: List<ProcedureWithPatient>, onOpenPatient: (String) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "Realizados (${items.size})",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = { expanded = !expanded }) {
-                    Text(if (expanded) "Ocultar" else "Ver")
+                item {
+                    BoardColumnView(
+                        column = BoardColumn.SCHEDULED,
+                        items = state.scheduled,
+                        onMove = onMove,
+                        modifier = Modifier.fillMaxWidth(),
+                        scrollable = false,
+                    )
                 }
-            }
-            if (expanded) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items.forEach { item ->
-                        PerformedRow(item = item, onOpenPatient = { onOpenPatient(item.procedure.patientId) })
+                item {
+                    var expanded by remember { mutableStateOf(false) }
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    "${BoardColumn.DONE.title} (${state.done.size})",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                TextButton(onClick = { expanded = !expanded }) {
+                                    Text(if (expanded) "Ocultar" else "Ver")
+                                }
+                            }
+                            if (expanded) {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    state.done.forEach { item ->
+                                        ProcedureCard(
+                                            item = item,
+                                            onMove = onMove,
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -245,68 +199,106 @@ private fun PerformedSection(items: List<ProcedureWithPatient>, onOpenPatient: (
 }
 
 @Composable
-private fun PerformedRow(item: ProcedureWithPatient, onOpenPatient: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Text("✓", color = MaterialTheme.colorScheme.primary)
-        Column(Modifier.weight(1f)) {
-            Text(item.procedure.kind, style = MaterialTheme.typography.bodyMedium)
-            Text(item.patientName, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+private fun BoardColumnView(
+    column: BoardColumn,
+    items: List<BoardItem>,
+    onMove: (String, BoardColumn) -> Unit,
+    modifier: Modifier = Modifier,
+    /**
+     * true: la columna tiene altura acotada (tablet) y puede desplazar su
+     * propia lista. false: vive dentro de un LazyColumn padre (teléfono);
+     * un LazyColumn anidado recibiría altura infinita y tumba la app
+     * (IllegalStateException al medir), así que se lista con Column.
+     */
+    scrollable: Boolean,
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            "${column.title} (${items.size})",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        if (!scrollable || column == BoardColumn.DONE) {
+            // Sin desplazamiento propio: lista directa.
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items.forEach { item ->
+                    ProcedureCard(item = item, onMove = onMove, modifier = Modifier.fillMaxWidth())
+                }
+            }
+        } else {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                items(items, key = { it.procedure.id }) { item ->
+                    ProcedureCard(item = item, onMove = onMove, modifier = Modifier.fillMaxWidth())
+                }
+            }
         }
-        TextButton(onClick = onOpenPatient) { Text("Ver") }
     }
 }
 
 @Composable
 private fun ProcedureCard(
-    item: ProcedureWithPatient,
-    onToPreparation: () -> Unit,
-    onPerform: () -> Unit,
-    onCancel: () -> Unit,
-    onOpenPatient: () -> Unit,
+    item: BoardItem,
+    onMove: (String, BoardColumn) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val p = item.procedure
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier,
         colors = CardDefaults.cardColors(
-            containerColor = if (p.status == ProcedureState.PERFORMED)
+            containerColor = if (p.status == BoardColumn.DONE.state)
                 MaterialTheme.colorScheme.surfaceVariant
             else MaterialTheme.colorScheme.surface,
         ),
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                PriorityChip(p.priority)
-                p.scheduledTime?.let {
-                    Text(it, style = MaterialTheme.typography.labelMedium, color = TextSecondary)
-                }
+            if (item.bed != null) {
+                Text(
+                    "CAMA ${item.bed}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
-            Text(p.kind, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            Text(item.patientName, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-            p.note?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+            Text(
+                p.kind,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                item.displayName,
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary,
+            )
+            p.scheduledTime?.let {
+                Text(it, style = MaterialTheme.typography.labelMedium, color = TextSecondary)
             }
+            Spacer(Modifier.height(2.dp))
             when (p.status) {
-                ProcedureState.PENDING -> {
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Button(onClick = onToPreparation) { Text("Preparar") }
-                        TextButton(onClick = onCancel) { Text("Cancelar") }
+                BoardColumn.PROPOSED.state -> {
+                    Button(onClick = { onMove(p.id, BoardColumn.SCHEDULED) }) {
+                        Text("Programar →")
                     }
                 }
-                ProcedureState.PREPARATION -> {
+                BoardColumn.SCHEDULED.state -> {
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Button(onClick = onPerform) { Text("Realizado") }
-                        TextButton(onClick = onCancel) { Text("Cancelar") }
+                        Button(onClick = { onMove(p.id, BoardColumn.DONE) }) {
+                            Text("Realizado ✓")
+                        }
+                        TextButton(onClick = { onMove(p.id, BoardColumn.PROPOSED) }) {
+                            Text("← Propuesto")
+                        }
                     }
                 }
                 else -> {
-                    TextButton(onClick = onOpenPatient) { Text("Ver paciente") }
+                    Text(
+                        "✓ Completado",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary,
+                    )
                 }
             }
         }

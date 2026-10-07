@@ -7,18 +7,21 @@ import com.reynelbusto.paserevista.core.IsoDate
  * el dominio habla en enums tipados y nunca en códigos TEXT.
  */
 
-/** Paciente: identidad clínica relativamente estable. */
+/** Paciente: identidad clínica relativamente estable.
+ * Pivot entrega de guardia — REGLA DE ORO: ningún dato es obligatorio.
+ * Los campos personales pueden ser null hasta que se conozcan. */
 data class Patient(
     val id: String,
-    val fullName: String,
-    val birthDate: IsoDate,
-    val sex: Sex,
-    val hcNumber: String,
+    val fullName: String?,
+    val birthDate: IsoDate?,
+    val sex: Sex?,
+    val hcNumber: String?,
     val bloodGroup: String? = null,
+    val address: String? = null,
     val serviceId: String,
     val admissionDate: IsoDate,
     val admissionReason: String? = null,
-    val mainDiagnosis: String,
+    val mainDiagnosis: String?,
     val comorbidities: List<String> = emptyList(),
     val status: PatientState = PatientState.ACTIVE,
     val dischargeDate: IsoDate? = null,
@@ -29,6 +32,61 @@ data class Patient(
     val createdAt: Long,
     val updatedAt: Long,
 )
+
+/**
+ * Tarjeta de cama: el corazón de la app de entrega de guardia.
+ * Una por paciente y jornada. Al abrir una jornada nueva los valores se heredan
+ * (nada se reescribe): solo se edita el delta.
+ */
+data class CaseCard(
+    val id: String,
+    val patientId: String,
+    val journeyId: String,
+    val bed: String,
+    val diagnosis: String? = null,
+    val scheduledProcedure: String? = null,
+    val currentState: String? = null,
+    val antibiotic: String? = null,
+    /** Etiqueta Pendiente/Listo. Listo ⇒ la tarjeta sube a la pizarra Kanban. */
+    val ready: Boolean = false,
+    val createdAt: Long,
+    val updatedAt: Long,
+)
+
+/** Apartado personalizado de la tarjeta ("＋ Apartado"): nombre libre, renombrable. */
+data class CustomField(
+    val id: String,
+    val patientId: String,
+    val label: String,
+    val value: String,
+    val sortOrder: Int = 0,
+    val createdAt: Long,
+    val updatedAt: Long,
+)
+
+/** Entrada del historial de la tarjeta: qué cambió y cuándo (agenda real). */
+data class CaseHistoryEntry(
+    val id: String,
+    val patientId: String,
+    val journeyId: String?,
+    val occurredAt: Long,
+    val summary: String,
+)
+
+/** Columnas de la pizarra Kanban. Mapean a ProcedureState. */
+enum class BoardColumn(val title: String, val state: ProcedureState) {
+    PROPOSED("Propuesto", ProcedureState.PENDING),
+    SCHEDULED("Programado", ProcedureState.PREPARATION),
+    DONE("Realizado", ProcedureState.PERFORMED),
+}
+
+/** Nombre visible del paciente: nombre si se conoce, si no "Cama N". */
+fun Patient.displayName(bed: String?): String =
+    fullName?.takeIf { it.isNotBlank() } ?: "Cama ${bed ?: "—"}"
+
+/** Descripción visible del pendiente: la cargada, o aviso si va vacía. */
+fun Pending.displayDescription(): String =
+    description.takeIf { it.isNotBlank() } ?: "(sin descripción)"
 
 /** Jornada: el pase de revista de un día concreto del servicio. */
 data class Journey(

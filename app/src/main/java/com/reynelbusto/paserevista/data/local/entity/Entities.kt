@@ -22,15 +22,17 @@ import androidx.room.PrimaryKey
 )
 data class PatientEntity(
     @PrimaryKey val id: String,
-    @ColumnInfo(name = "full_name") val fullName: String,
-    @ColumnInfo(name = "birth_date") val birthDate: String,
-    val sex: String,
-    @ColumnInfo(name = "hc_number") val hcNumber: String,
+    /** Pivot entrega de guardia: ningún dato personal es obligatorio (null = aún no conocido). */
+    @ColumnInfo(name = "full_name") val fullName: String?,
+    @ColumnInfo(name = "birth_date") val birthDate: String?,
+    val sex: String?,
+    @ColumnInfo(name = "hc_number") val hcNumber: String?,
     @ColumnInfo(name = "blood_group") val bloodGroup: String?,
+    @ColumnInfo(name = "address") val address: String?,
     @ColumnInfo(name = "service_id") val serviceId: String,
     @ColumnInfo(name = "admission_date") val admissionDate: String,
     @ColumnInfo(name = "admission_reason") val admissionReason: String?,
-    @ColumnInfo(name = "main_diagnosis") val mainDiagnosis: String,
+    @ColumnInfo(name = "main_diagnosis") val mainDiagnosis: String?,
     val status: String,
     @ColumnInfo(name = "discharge_date") val dischargeDate: String?,
     @ColumnInfo(name = "discharge_reason") val dischargeReason: String?,
@@ -57,6 +59,90 @@ data class PatientEntity(
 data class PatientComorbidityEntity(
     @ColumnInfo(name = "patient_id") val patientId: String,
     val label: String,
+)
+
+/**
+ * Tarjeta de cama (pivot entrega de guardia): una por paciente y jornada.
+ * Hereda valores de la jornada anterior (el motor la crea copiando el delta base).
+ */
+@Entity(
+    tableName = "case_card",
+    foreignKeys = [
+        ForeignKey(
+            entity = PatientEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["patient_id"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+        ForeignKey(
+            entity = JourneyEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["journey_id"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [
+        Index(value = ["patient_id", "journey_id"], unique = true),
+        Index(value = ["journey_id"]),
+    ],
+)
+data class CaseCardEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "patient_id") val patientId: String,
+    @ColumnInfo(name = "journey_id") val journeyId: String,
+    val bed: String,
+    val diagnosis: String?,
+    @ColumnInfo(name = "scheduled_procedure") val scheduledProcedure: String?,
+    @ColumnInfo(name = "current_state") val currentState: String?,
+    val antibiotic: String?,
+    /** Etiqueta Pendiente(false)/Listo(true). */
+    val ready: Boolean,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long,
+)
+
+/** Apartado personalizado de la tarjeta: nombre libre ("Alergias"), renombrable. */
+@Entity(
+    tableName = "custom_field",
+    foreignKeys = [
+        ForeignKey(
+            entity = PatientEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["patient_id"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index(value = ["patient_id", "sort_order"])],
+)
+data class CustomFieldEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "patient_id") val patientId: String,
+    val label: String,
+    val value: String,
+    @ColumnInfo(name = "sort_order") val sortOrder: Int,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long,
+)
+
+/** Historial de la tarjeta: entradas append-only (qué cambió, cuándo). */
+@Entity(
+    tableName = "case_history",
+    foreignKeys = [
+        ForeignKey(
+            entity = PatientEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["patient_id"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index(value = ["patient_id", "occurred_at"])],
+)
+data class CaseHistoryEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "patient_id") val patientId: String,
+    @ColumnInfo(name = "journey_id") val journeyId: String?,
+    @ColumnInfo(name = "occurred_at") val occurredAt: Long,
+    val summary: String,
 )
 
 @Entity(

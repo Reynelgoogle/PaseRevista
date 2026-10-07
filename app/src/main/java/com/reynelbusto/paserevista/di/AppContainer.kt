@@ -2,10 +2,19 @@ package com.reynelbusto.paserevista.di
 
 import android.content.Context
 import androidx.room.Room
+import com.reynelbusto.paserevista.BuildConfig
 import com.reynelbusto.paserevista.core.Clock
 import com.reynelbusto.paserevista.core.SystemClock
+import com.reynelbusto.paserevista.data.backup.BackupManager
+import com.reynelbusto.paserevista.data.backup.WalCheckpointResult
+import com.reynelbusto.paserevista.data.local.DATABASE_NAME
 import com.reynelbusto.paserevista.data.local.DatabaseUnitOfWork
+import com.reynelbusto.paserevista.data.local.MIGRATION_1_2
 import com.reynelbusto.paserevista.data.local.PaseRevistaDatabase
+import com.reynelbusto.paserevista.data.local.SCHEMA_VERSION
+import com.reynelbusto.paserevista.data.repository.CaseCardRepositoryImpl
+import com.reynelbusto.paserevista.data.repository.CaseHistoryRepositoryImpl
+import com.reynelbusto.paserevista.data.repository.CustomFieldRepositoryImpl
 import com.reynelbusto.paserevista.data.repository.DailyRecordRepositoryImpl
 import com.reynelbusto.paserevista.data.repository.DeviceRepositoryImpl
 import com.reynelbusto.paserevista.data.repository.JourneyRepositoryImpl
@@ -15,7 +24,10 @@ import com.reynelbusto.paserevista.data.repository.ProcedureRepositoryImpl
 import com.reynelbusto.paserevista.data.repository.ResultRepositoryImpl
 import com.reynelbusto.paserevista.data.repository.TreatmentRepositoryImpl
 import com.reynelbusto.paserevista.data.debug.DebugSeed
+import com.reynelbusto.paserevista.domain.repository.CaseCardRepository
+import com.reynelbusto.paserevista.domain.repository.CaseHistoryRepository
 import com.reynelbusto.paserevista.domain.repository.ClinicalUnitOfWork
+import com.reynelbusto.paserevista.domain.repository.CustomFieldRepository
 import com.reynelbusto.paserevista.domain.repository.DailyRecordRepository
 import com.reynelbusto.paserevista.domain.repository.DeviceRepository
 import com.reynelbusto.paserevista.domain.repository.JourneyRepository
@@ -24,28 +36,22 @@ import com.reynelbusto.paserevista.domain.repository.PendingRepository
 import com.reynelbusto.paserevista.domain.repository.ProcedureRepository
 import com.reynelbusto.paserevista.domain.repository.ResultRepository
 import com.reynelbusto.paserevista.domain.repository.TreatmentRepository
-import com.reynelbusto.paserevista.domain.usecase.AdmitPatientUseCase
-import com.reynelbusto.paserevista.domain.usecase.ChangeBedUseCase
-import com.reynelbusto.paserevista.domain.usecase.CreateJourneyUseCase
-import com.reynelbusto.paserevista.domain.usecase.CreatePatientUseCase
+import com.reynelbusto.paserevista.domain.usecase.AddBedUseCase
+import com.reynelbusto.paserevista.domain.usecase.BoardUseCase
+import com.reynelbusto.paserevista.domain.usecase.CaseCardUseCase
+import com.reynelbusto.paserevista.domain.usecase.CustomFieldUseCase
+import com.reynelbusto.paserevista.domain.usecase.DeleteCaseUseCase
 import com.reynelbusto.paserevista.domain.usecase.DischargeUseCase
-import com.reynelbusto.paserevista.domain.usecase.GetCurrentJourneyUseCase
-import com.reynelbusto.paserevista.domain.usecase.GetDailyRecordsUseCase
-import com.reynelbusto.paserevista.domain.usecase.GetPatientsUseCase
+import com.reynelbusto.paserevista.domain.usecase.EnsureDayUseCase
 import com.reynelbusto.paserevista.domain.usecase.PendingUseCase
 import com.reynelbusto.paserevista.domain.usecase.ProcedureUseCase
 import com.reynelbusto.paserevista.domain.usecase.DeviceUseCase
 import com.reynelbusto.paserevista.domain.usecase.ResultUseCase
 import com.reynelbusto.paserevista.domain.usecase.TreatmentUseCase
-import com.reynelbusto.paserevista.domain.usecase.ReviewUseCase
-import com.reynelbusto.paserevista.domain.usecase.StartJourneyUseCase
 
 /**
- * Inyección manual de dependencias (sin Hilt en FASE 5: menos riesgo de build).
- * Un solo punto de construcción; la UI solo recibe lo que necesita.
- *
- * SEAM DE CIFRADO: [openDatabase] es el único lugar donde se construye Room.
- * SQLCipher se conectará aquí con un SupportFactory, sin tocar DAOs ni repos.
+ * Inyección manual de dependencias (sin Hilt: menos riesgo de build).
+ * Pivot entrega de guardia: motor de jornadas invisible + tarjetas de cama.
  */
 class AppContainer(context: Context) {
 
@@ -59,8 +65,17 @@ class AppContainer(context: Context) {
         Room.databaseBuilder(
             appContext,
             PaseRevistaDatabase::class.java,
-            "paserevista.db",
-        ).build()
+            DATABASE_NAME,
+        ).addMigrations(MIGRATION_1_2).build()
+
+    /**
+     * Cierra Room para poder reemplazar el archivo .db (restaurar respaldo).
+     * La UI debe reiniciar la app después: los repositorios en memoria
+     * apuntan a la base anterior.
+     */
+    fun closeDatabase() {
+        database.close()
+    }
 
     // Repositorios
     val patientRepository: PatientRepository =
@@ -79,28 +94,68 @@ class AppContainer(context: Context) {
         ResultRepositoryImpl(database.resultDao())
     val procedureRepository: ProcedureRepository =
         ProcedureRepositoryImpl(database.procedureDao(), clock)
+    val caseCardRepository: CaseCardRepository =
+        CaseCardRepositoryImpl(database.caseCardDao(), clock)
+    val customFieldRepository: CustomFieldRepository =
+        CustomFieldRepositoryImpl(database.customFieldDao(), clock)
+    val caseHistoryRepository: CaseHistoryRepository =
+        CaseHistoryRepositoryImpl(database.caseHistoryDao(), clock)
 
-    // Casos de uso
-    val createPatient = CreatePatientUseCase(patientRepository, clock)
-    val admitPatient = AdmitPatientUseCase(
-        unitOfWork, patientRepository, journeyRepository, dailyRecordRepository, clock,
+    // Casos de uso — entrega de guardia
+    val board = BoardUseCase(
+        unitOfWork, procedureRepository, patientRepository, caseCardRepository,
+        caseHistoryRepository, clock,
     )
-    val getPatients = GetPatientsUseCase(patientRepository)
-    val getCurrentJourney = GetCurrentJourneyUseCase(journeyRepository, clock)
-    val createJourney = CreateJourneyUseCase(journeyRepository, clock)
-    val startJourney = StartJourneyUseCase(
-        unitOfWork, journeyRepository, patientRepository, dailyRecordRepository, clock,
+    val addBed = AddBedUseCase(
+        unitOfWork, patientRepository, journeyRepository, caseCardRepository,
+        caseHistoryRepository, clock,
     )
-    val getDailyRecords = GetDailyRecordsUseCase(dailyRecordRepository)
-    val review = ReviewUseCase(dailyRecordRepository, clock)
-    val discharge = DischargeUseCase(unitOfWork, patientRepository, pendingRepository, clock)
-    val changeBed = ChangeBedUseCase(dailyRecordRepository)
-    // FASE 8 — módulos operativos
+    val ensureDay = EnsureDayUseCase(
+        unitOfWork, journeyRepository, patientRepository, caseCardRepository,
+        dailyRecordRepository, clock,
+    )
+    val caseCards = CaseCardUseCase(
+        unitOfWork, caseCardRepository, patientRepository, caseHistoryRepository, board, clock,
+    )
+    val customFields = CustomFieldUseCase(
+        unitOfWork, customFieldRepository, caseHistoryRepository, clock,
+    )
+    val discharge = DischargeUseCase(unitOfWork, patientRepository, pendingRepository, procedureRepository, clock)
+    val deleteCase = DeleteCaseUseCase(
+        unitOfWork, patientRepository, caseCardRepository, customFieldRepository,
+        pendingRepository, procedureRepository, dailyRecordRepository,
+        treatmentRepository, deviceRepository, resultRepository,
+    )
+
+    // Módulos clínicos
     val pendings = PendingUseCase(pendingRepository, clock)
     val treatments = TreatmentUseCase(unitOfWork, treatmentRepository, clock)
     val devices = DeviceUseCase(deviceRepository, clock)
     val results = ResultUseCase(resultRepository, clock)
     val procedures = ProcedureUseCase(unitOfWork, procedureRepository, pendingRepository, clock)
+
+    // Respaldo local de la base de datos (Documents/EntregaGuardia/).
+    val backupManager = BackupManager(
+        appContext = context.applicationContext,
+        clock = clock,
+        databaseFile = { context.applicationContext.getDatabasePath(DATABASE_NAME) },
+        checkpointWal = {
+            database.openHelper.writableDatabase
+                .query("PRAGMA wal_checkpoint(TRUNCATE)").use { c ->
+                    c.moveToFirst()
+                    WalCheckpointResult(
+                        busy = c.getInt(0) == 1,
+                        logFrames = c.getInt(1),
+                        checkpointedFrames = c.getInt(2),
+                    )
+                }
+        },
+        closeDatabase = { closeDatabase() },
+        schemaVersion = SCHEMA_VERSION,
+        countCards = { caseCardRepository.countAll() },
+        countBeds = { caseCardRepository.countDistinctBeds() },
+        appVersion = BuildConfig.VERSION_NAME,
+    )
 
     // Solo-debug: datos de prueba claramente marcados.
     val debugSeed = DebugSeed(

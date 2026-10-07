@@ -6,6 +6,9 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import com.reynelbusto.paserevista.data.local.entity.CaseCardEntity
+import com.reynelbusto.paserevista.data.local.entity.CaseHistoryEntity
+import com.reynelbusto.paserevista.data.local.entity.CustomFieldEntity
 import com.reynelbusto.paserevista.data.local.entity.DailyRecordEntity
 import com.reynelbusto.paserevista.data.local.entity.DeviceEntity
 import com.reynelbusto.paserevista.data.local.entity.JourneyEntity
@@ -25,6 +28,10 @@ interface PatientDao {
 
     @Update
     suspend fun update(patient: PatientEntity)
+
+    /** Borrado total del caso ("se cargó por error"). */
+    @Query("DELETE FROM patient WHERE id = :id")
+    suspend fun deleteById(id: String)
 
     @Query("SELECT * FROM patient WHERE id = :id AND deleted_at IS NULL")
     suspend fun getById(id: String): PatientEntity?
@@ -49,12 +56,17 @@ interface PatientDao {
     /**
      * Búsqueda global incluyendo cama (vive en el DailyRecord de la jornada dada).
      * Offline y tolerante: LIKE por nombre, HC, diagnóstico o cama.
+     * M11: el join a daily_record se restringe a la jornada actual — antes
+     * unía TODAS las jornadas y la cama de ayer podía colar un falso positivo.
      */
     @Query(
         """SELECT DISTINCT p.* FROM patient p
            LEFT JOIN daily_record dr ON dr.patient_id = p.id
-           LEFT JOIN journey j ON j.id = dr.journey_id
-             AND j.service_id = :serviceId AND j.clinical_date = :clinicalDate
+             AND dr.journey_id = (
+               SELECT j.id FROM journey j
+               WHERE j.service_id = :serviceId AND j.clinical_date = :clinicalDate
+               LIMIT 1
+             )
            WHERE p.service_id = :serviceId AND p.deleted_at IS NULL
              AND (p.full_name LIKE '%' || :query || '%'
                OR p.hc_number LIKE '%' || :query || '%'
@@ -163,6 +175,9 @@ interface DailyRecordDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertAll(records: List<DailyRecordEntity>)
 
+    @Query("DELETE FROM daily_record WHERE patient_id = :patientId")
+    suspend fun deleteByPatient(patientId: String)
+
     /**
      * Registro más reciente del paciente anterior a una fecha clínica.
      * Es la referencia AYER (solo lectura en la ficha).
@@ -192,6 +207,12 @@ interface PendingDao {
 
     @Update
     suspend fun update(pending: PendingEntity)
+
+    @Query("DELETE FROM `pending` WHERE patient_id = :patientId")
+    suspend fun deleteByPatient(patientId: String)
+
+    @Query("SELECT * FROM `pending` WHERE idempotency_key = :key LIMIT 1")
+    suspend fun findByIdempotencyKey(key: String): PendingEntity?
 
     @Query(
         """SELECT * FROM pending
@@ -254,6 +275,9 @@ interface TreatmentDao {
 
     @Query("SELECT * FROM treatment WHERE id = :id")
     suspend fun getById(id: String): TreatmentEntity?
+
+    @Query("DELETE FROM treatment WHERE patient_id = :patientId")
+    suspend fun deleteByPatient(patientId: String)
 }
 
 @Dao
@@ -274,6 +298,12 @@ interface TreatmentEventDao {
            ORDER BY occurred_at""",
     )
     suspend fun getByTreatment(treatmentId: String): List<TreatmentEventEntity>
+
+    @Query(
+        """DELETE FROM treatment_event WHERE treatment_id IN
+           (SELECT id FROM treatment WHERE patient_id = :patientId)""",
+    )
+    suspend fun deleteByPatient(patientId: String)
 }
 
 @Dao
@@ -293,6 +323,9 @@ interface DeviceDao {
 
     @Query("SELECT * FROM device WHERE id = :id")
     suspend fun getById(id: String): DeviceEntity?
+
+    @Query("DELETE FROM device WHERE patient_id = :patientId")
+    suspend fun deleteByPatient(patientId: String)
 }
 
 @Dao
@@ -306,6 +339,9 @@ interface ResultDao {
            ORDER BY result_date DESC""",
     )
     fun observeByPatient(patientId: String): Flow<List<ResultEntity>>
+
+    @Query("DELETE FROM clinical_result WHERE patient_id = :patientId")
+    suspend fun deleteByPatient(patientId: String)
 }
 
 @Dao
@@ -316,6 +352,9 @@ interface ProcedureDao {
     @Update
     suspend fun update(procedure: ProcedureEntity)
 
+    @Query("DELETE FROM `procedure` WHERE patient_id = :patientId")
+    suspend fun deleteByPatient(patientId: String)
+
     @Query(
         """SELECT * FROM `procedure`
            WHERE journey_id = :journeyId AND status IN ('pending','preparation')
@@ -325,4 +364,122 @@ interface ProcedureDao {
 
     @Query("SELECT * FROM `procedure` WHERE id = :id")
     suspend fun getById(id: String): ProcedureEntity?
+
+    /** Pizarra Kanban: procedimientos activos de todas las jornadas. */
+    @Query(
+        """SELECT * FROM `procedure`
+           WHERE status IN ('pending','preparation')
+           ORDER BY created_at""",
+    )
+    fun observeActiveAll(): Flow<List<ProcedureEntity>>
+
+    @Query(
+        """SELECT * FROM `procedure`
+           WHERE status = 'performed'
+           ORDER BY performed_at DESC LIMIT :limit""",
+    )
+    fun observeRecentPerformed(limit: Int = 50): Flow<List<ProcedureEntity>>
+
+    /** Procedimiento activo (no realizado/cancelado) de un paciente, si existe. */
+    @Query(
+        """SELECT * FROM `procedure`
+           WHERE patient_id = :patientId AND status IN ('pending','preparation')
+           ORDER BY created_at DESC LIMIT 1""",
+    )
+    suspend fun findActiveByPatient(patientId: String): ProcedureEntity?
+}
+
+@Dao
+interface CaseCardDao {
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(card: CaseCardEntity)
+
+    @Update
+    suspend fun update(card: CaseCardEntity)
+
+    @Query("DELETE FROM case_card WHERE patient_id = :patientId")
+    suspend fun deleteByPatient(patientId: String)
+
+    @Query("SELECT * FROM case_card WHERE journey_id = :journeyId ORDER BY bed")
+    fun observeByJourney(journeyId: String): Flow<List<CaseCardEntity>>
+
+    @Query("SELECT * FROM case_card WHERE patient_id = :patientId AND journey_id = :journeyId")
+    suspend fun getByPatientAndJourney(patientId: String, journeyId: String): CaseCardEntity?
+
+    /** Última tarjeta del paciente antes de una fecha (para heredar al día nuevo). */
+    @Query(
+        """SELECT cc.* FROM case_card cc
+           JOIN journey j ON j.id = cc.journey_id
+           WHERE cc.patient_id = :patientId AND j.clinical_date < :clinicalDate
+           ORDER BY j.clinical_date DESC LIMIT 1""",
+    )
+    suspend fun findLatestBefore(patientId: String, clinicalDate: String): CaseCardEntity?
+
+    @Query("SELECT * FROM case_card WHERE id = :id")
+    suspend fun getById(id: String): CaseCardEntity?
+
+    /** Última tarjeta del paciente (para nombre de cama en la pizarra). */
+    @Query("SELECT * FROM case_card WHERE patient_id = :patientId ORDER BY created_at DESC LIMIT 1")
+    suspend fun findLatestByPatient(patientId: String): CaseCardEntity?
+
+    /** Tarjeta de una cama en una jornada (para validar duplicados). */
+    @Query("SELECT * FROM case_card WHERE journey_id = :journeyId AND bed = :bed LIMIT 1")
+    suspend fun findByJourneyAndBed(journeyId: String, bed: String): CaseCardEntity?
+
+    /** Conteos para el sidecar del respaldo. */
+    @Query("SELECT COUNT(*) FROM case_card")
+    suspend fun countAll(): Int
+
+    @Query("SELECT COUNT(DISTINCT bed) FROM case_card")
+    suspend fun countDistinctBeds(): Int
+
+    /** Últimos diagnósticos usados (sugerencias al editar). Sin cambios de esquema. */
+    @Query(
+        """SELECT diagnosis FROM case_card
+           WHERE diagnosis IS NOT NULL AND TRIM(diagnosis) != ''
+           GROUP BY TRIM(diagnosis) ORDER BY MAX(updated_at) DESC LIMIT :limit""",
+    )
+    suspend fun recentDiagnoses(limit: Int): List<String>
+}
+
+@Dao
+interface CustomFieldDao {
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(field: CustomFieldEntity)
+
+    @Update
+    suspend fun update(field: CustomFieldEntity)
+
+    @Query("DELETE FROM custom_field WHERE id = :id")
+    suspend fun deleteById(id: String)
+
+    @Query("DELETE FROM custom_field WHERE patient_id = :patientId")
+    suspend fun deleteByPatient(patientId: String)
+
+    @Query(
+        """SELECT * FROM custom_field
+           WHERE patient_id = :patientId
+           ORDER BY sort_order, created_at""",
+    )
+    fun observeByPatient(patientId: String): Flow<List<CustomFieldEntity>>
+
+    @Query("SELECT COUNT(*) FROM custom_field WHERE patient_id = :patientId")
+    suspend fun countByPatient(patientId: String): Int
+
+    /** B12: siguiente sortOrder sin colisiones (MAX+1, no COUNT). */
+    @Query("SELECT COALESCE(MAX(sort_order), -1) FROM custom_field WHERE patient_id = :patientId")
+    suspend fun maxSortOrderByPatient(patientId: String): Int
+}
+
+@Dao
+interface CaseHistoryDao {
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(entry: CaseHistoryEntity)
+
+    @Query(
+        """SELECT * FROM case_history
+           WHERE patient_id = :patientId
+           ORDER BY occurred_at DESC""",
+    )
+    fun observeByPatient(patientId: String): Flow<List<CaseHistoryEntity>>
 }
