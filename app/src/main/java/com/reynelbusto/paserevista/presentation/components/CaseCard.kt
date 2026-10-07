@@ -19,7 +19,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -54,6 +53,17 @@ import com.reynelbusto.paserevista.domain.model.displayDescription
 import com.reynelbusto.paserevista.domain.usecase.CaseCardPatch
 import com.reynelbusto.paserevista.presentation.camas.CardRow
 import com.reynelbusto.paserevista.presentation.theme.TextSecondary
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
+import com.reynelbusto.paserevista.presentation.theme.ClinicalCritical
+import com.reynelbusto.paserevista.presentation.theme.ClinicalStable
+import com.reynelbusto.paserevista.presentation.theme.TextPrimary
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -97,156 +107,210 @@ fun CaseCardView(
     var showDischarge by remember { mutableStateOf(false) }
     var showDeleteCase by remember { mutableStateOf(false) }
     var renameField by remember { mutableStateOf<CustomField?>(null) }
+    var expanded by remember { mutableStateOf(false) }
 
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (card.ready) MaterialTheme.colorScheme.primaryContainer
-            else MaterialTheme.colorScheme.surface,
-        ),
-    ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            // Cabecera: cama + etiqueta + menú.
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "CAMA ${card.bed}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(Modifier.width(8.dp))
-                ReadyTag(ready = card.ready)
-                Spacer(Modifier.weight(1f))
-                IconButton(onClick = { showMenu = true }) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = "Opciones")
-                }
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    DropdownMenuItem(
-                        text = { Text("Datos del paciente") },
-                        onClick = { showMenu = false; showPatientData = true },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("＋ Apartado") },
-                        onClick = { showMenu = false; showAddField = true },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Historial") },
-                        onClick = { showMenu = false; showHistory = !showHistory },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Dar de alta") },
-                        onClick = { showMenu = false; showDischarge = true },
-                    )
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                "Borrar tarjeta",
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                        },
-                        onClick = { showMenu = false; showDeleteCase = true },
-                    )
-                }
-            }
-            if (displayName != "Cama ${card.bed}") {
-                Text(displayName, style = MaterialTheme.typography.titleSmall)
-            }
-            // Marcas.
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (row.patient.isOutOfService) {
+    val accent = if (card.ready) ClinicalStable else ClinicalCritical
+    if (expanded) {
+        // ── Tarjeta expandida nítida (propuesta 2): cabecera + filas
+        // etiqueta/valor con divisores; pendientes y grupo en rojo negrita.
+        Card(
+            modifier = modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+            ),
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                // Cabecera: tocarla contrae la tarjeta.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { expanded = false },
+                ) {
                     Text(
-                        "⚠ Fuera de servicio",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.error,
+                        text = "CAMA ${card.bed}",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary,
                     )
-                }
-                if (row.hasInterconsult) {
-                    Text(
-                        "⚠ Interconsulta al servicio",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            }
-            // Los 6 campos (solo los informados).
-            FieldLine("Dx", card.diagnosis)
-            FieldLine("Proceder", card.scheduledProcedure)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.clickable { showPendings = true },
-            ) {
-                Text(
-                    "Pendientes: ",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary,
-                )
-                Text(
-                    text = if (row.openPendings.isEmpty()) "—"
-                    else "${row.openPendings.size} (ver)",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-            FieldLine("Grupo", row.patient.bloodGroup)
-            FieldLine("Estado", card.currentState)
-            FieldLine("ATB", card.antibiotic)
-            // Apartados personalizados.
-            row.customFields.forEach { field ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        FieldLine(field.label, field.value.ifBlank { "—" })
+                    Spacer(Modifier.width(10.dp))
+                    StatusPill(ready = card.ready)
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = "Opciones")
                     }
-                    IconButton(onClick = { renameField = field }) {
-                        Icon(
-                            Icons.Filled.Edit,
-                            contentDescription = "Renombrar apartado",
-                            tint = TextSecondary,
+                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                        DropdownMenuItem(
+                            text = { Text("Editar tarjeta") },
+                            onClick = { showMenu = false; showEditFields = true },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Datos del paciente") },
+                            onClick = { showMenu = false; showPatientData = true },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("＋ Apartado") },
+                            onClick = { showMenu = false; showAddField = true },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Historial") },
+                            onClick = { showMenu = false; showHistory = !showHistory },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Dar de alta") },
+                            onClick = { showMenu = false; showDischarge = true },
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    "Borrar tarjeta",
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            },
+                            onClick = { showMenu = false; showDeleteCase = true },
                         )
                     }
                 }
-            }
-            // Acciones principales.
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TextButton(onClick = { showEditFields = true }) { Text("Editar") }
-                TextButton(onClick = onToggleReady) {
-                    Text(if (card.ready) "A pendiente" else "Listo ✓")
-                }
-                Spacer(Modifier.weight(1f))
-                IconButton(onClick = { showShareChoice = true }) {
-                    Icon(Icons.Filled.Share, contentDescription = "Compartir")
-                }
-            }
-            // Historial desplegable.
-            if (showHistory) {
-                HorizontalDivider()
-                Text(
-                    "Historial",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                if (row.history.isEmpty()) {
+                if (displayName != "Cama ${card.bed}") {
                     Text(
-                        "Sin cambios registrados.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary,
+                        displayName,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = TextPrimary,
                     )
-                } else {
-                    row.history.forEach { entry ->
+                }
+                MarcasRow(row)
+                HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                DetailRow("Diagnóstico", card.diagnosis)
+                DetailRow("Proceder programado", card.scheduledProcedure)
+                DetailRow(
+                    label = "Pendientes",
+                    value = pendingsSummary(row),
+                    highlight = row.openPendings.isNotEmpty(),
+                    onClick = { showPendings = true },
+                )
+                DetailRow(
+                    label = "Grupo sanguíneo",
+                    value = row.patient.bloodGroup,
+                    highlight = !row.patient.bloodGroup.isNullOrBlank(),
+                )
+                DetailRow("Estado actual", card.currentState)
+                DetailRow("Antibiótico", card.antibiotic)
+                // Apartados personalizados.
+                row.customFields.forEach { field ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            DetailRow(field.label, field.value.ifBlank { "—" })
+                        }
+                        IconButton(onClick = { renameField = field }) {
+                            Icon(
+                                Icons.Filled.Edit,
+                                contentDescription = "Renombrar apartado",
+                                tint = TextSecondary,
+                            )
+                        }
+                    }
+                }
+                // Historial desplegable.
+                if (showHistory) {
+                    HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                    Text(
+                        "Historial",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    if (row.history.isEmpty()) {
                         Text(
-                            "• ${formatDay(entry.occurredAt)} — ${entry.summary}",
+                            "Sin cambios registrados.",
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondary,
                         )
+                    } else {
+                        row.history.forEach { entry ->
+                            Text(
+                                "• ${formatDay(entry.occurredAt)} — ${entry.summary}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary,
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                // Acciones principales.
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(
+                        onClick = onToggleReady,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(if (card.ready) "Volver a pendiente" else "✓ Marcar Listo")
+                    }
+                    OutlinedButton(
+                        onClick = { showShareChoice = true },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text("Compartir")
                     }
                 }
             }
         }
+    } else {
+        // ── Vista colapsada tipo lista (propuesta 2): franja de color a la
+        // izquierda (roja = pendiente, verde = lista); tocarla abre la tarjeta.
+        Card(
+            modifier = modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+            ),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = true },
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(10.dp)
+                        .fillMaxHeight()
+                        .background(accent),
+                )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        text = "CAMA ${card.bed}",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary,
+                    )
+                    val summary = listOfNotNull(
+                        card.diagnosis?.takeIf { it.isNotBlank() },
+                        card.scheduledProcedure?.takeIf { it.isNotBlank() },
+                    ).joinToString(" · ")
+                    Text(
+                        text = summary.ifBlank { "—" },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary,
+                    )
+                    val pendCount = row.openPendings.size
+                    Text(
+                        text = if (card.ready) {
+                            "✓ LISTO"
+                        } else if (pendCount > 0) {
+                            "⚠ $pendCount pendiente${if (pendCount == 1) "" else "s"}"
+                        } else {
+                            "Pendiente"
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = accent,
+                    )
+                    MarcasRow(row)
+                }
+            }
+        }
     }
-
     if (showEditFields) {
         EditFieldsDialog(
             card = row.card,
@@ -393,18 +457,84 @@ fun CaseCardView(
     }
 }
 
+/** Píldora sólida de estado: roja PENDIENTE / verde LISTO (propuesta 2). */
 @Composable
-private fun FieldLine(label: String, value: String?) {
-    if (value.isNullOrBlank()) return
-    Row {
+private fun StatusPill(ready: Boolean) {
+    Surface(
+        color = if (ready) ClinicalStable else ClinicalCritical,
+        shape = RoundedCornerShape(50),
+    ) {
         Text(
-            "$label: ",
-            style = MaterialTheme.typography.bodyMedium,
-            color = TextSecondary,
+            text = if (ready) "LISTO" else "PENDIENTE",
+            color = Color.White,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
         )
-        Text(value, style = MaterialTheme.typography.bodyMedium)
     }
 }
+
+/** Fila etiqueta/valor de la tarjeta nítida, separada por un divisor fino. */
+@Composable
+private fun DetailRow(
+    label: String,
+    value: String?,
+    highlight: Boolean = false,
+    onClick: (() -> Unit)? = null,
+) {
+    Column {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+                .padding(vertical = 8.dp),
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextSecondary,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = value?.takeIf { it.isNotBlank() } ?: "—",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (highlight) FontWeight.Bold else FontWeight.Normal,
+                color = if (highlight) ClinicalCritical else TextPrimary,
+                modifier = Modifier.weight(1f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+    }
+}
+
+/** Marcas visibles en lista y tarjeta: fuera de servicio / interconsulta. */
+@Composable
+private fun MarcasRow(row: CardRow) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (row.patient.isOutOfService) {
+            Text(
+                "⚠ Fuera de servicio",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        if (row.hasInterconsult) {
+            Text(
+                "⚠ Interconsulta al servicio",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+    }
+}
+
+/** Resumen de pendientes para la fila destacada en rojo. */
+private fun pendingsSummary(row: CardRow): String =
+    if (row.openPendings.isEmpty()) "—"
+    else row.openPendings.joinToString(", ") { it.description }
 
 private fun formatDay(millis: Long): String = try {
     Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault())
