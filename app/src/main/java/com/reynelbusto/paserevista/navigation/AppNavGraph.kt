@@ -3,6 +3,7 @@ package com.reynelbusto.paserevista.navigation
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Icon
@@ -21,6 +22,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.reynelbusto.paserevista.di.AppContainer
+import com.reynelbusto.paserevista.presentation.agenda.AgendaScreen
 import com.reynelbusto.paserevista.presentation.board.BoardScreen
 import com.reynelbusto.paserevista.presentation.camas.CamasScreen
 import com.reynelbusto.paserevista.presentation.more.MoreScreen
@@ -33,11 +35,12 @@ private data class BottomDestination(
 
 private val BOTTOM_DESTINATIONS = listOf(
     BottomDestination(Routes.CAMAS, "Camas", Icons.Filled.Home),
+    BottomDestination(Routes.AGENDA, "Agenda", Icons.Filled.Edit),
     BottomDestination(Routes.BOARD, "Pizarra", Icons.Filled.DateRange),
     BottomDestination(Routes.MORE, "Más", Icons.Filled.MoreVert),
 )
 
-/** Navegación principal: 3 destinos con barra inferior Material 3. */
+/** Navegación principal: 4 destinos con barra inferior Material 3. */
 @Composable
 fun AppNavGraph(
     container: AppContainer,
@@ -82,6 +85,7 @@ fun AppNavGraph(
                 )
             }
             composable(Routes.BOARD) { BoardScreen(container = container) }
+            composable(Routes.AGENDA) { AgendaScreen(container = container) }
             composable(Routes.MORE) { MoreScreen(container = container) }
         }
     }

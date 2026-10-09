@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -32,8 +34,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -41,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 import com.reynelbusto.paserevista.di.AppContainer
 import com.reynelbusto.paserevista.domain.model.BoardColumn
 import com.reynelbusto.paserevista.domain.usecase.BoardItem
@@ -198,60 +201,76 @@ private fun BoardPanelView(
                 )
             }
         } else {
-            // Teléfono: columnas apiladas con secciones colapsables.
+            // Teléfono: Kanban auténtico tipo Trello — 3 páginas de ancho
+            // completo con swipe horizontal (antes: columnas apiladas, casi
+            // idénticas a la vista Lista).
+            BoardPagerView(
+                state = state,
+                onMove = onMove,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+/**
+ * Panel en teléfono: Kanban real tipo Trello. Tres páginas de ancho completo
+ * (Propuesto → Programado → Realizado) con desplazamiento horizontal; cada
+ * página desplaza su propia lista vertical de tarjetas.
+ */
+@Composable
+private fun BoardPagerView(
+    state: BoardUiState,
+    onMove: (String, BoardColumn) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val pages = listOf(
+        BoardColumn.PROPOSED to state.proposed,
+        BoardColumn.SCHEDULED to state.scheduled,
+        BoardColumn.DONE to state.done,
+    )
+    val pagerState = rememberPagerState(pageCount = { pages.size })
+    val scope = rememberCoroutineScope()
+    Column(modifier = modifier.fillMaxSize()) {
+        // Indicador de páginas: títulos con contador, tocables.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            pages.forEachIndexed { index, (column, items) ->
+                val selected = pagerState.currentPage == index
+                TextButton(onClick = {
+                    scope.launch { pagerState.animateScrollToPage(index) }
+                }) {
+                    Text(
+                        "${column.title} (${items.size})",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                        color = if (selected) MaterialTheme.colorScheme.primary
+                        else TextSecondary,
+                    )
+                }
+            }
+        }
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+        ) { page ->
+            val (_, items) = pages[page]
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                item {
-                    BoardColumnView(
-                        column = BoardColumn.PROPOSED,
-                        items = state.proposed,
+                items(items, key = { it.procedure.id }) { item ->
+                    ProcedureCard(
+                        item = item,
                         onMove = onMove,
                         modifier = Modifier.fillMaxWidth(),
-                        scrollable = false,
                     )
-                }
-                item {
-                    BoardColumnView(
-                        column = BoardColumn.SCHEDULED,
-                        items = state.scheduled,
-                        onMove = onMove,
-                        modifier = Modifier.fillMaxWidth(),
-                        scrollable = false,
-                    )
-                }
-                item {
-                    var expanded by remember { mutableStateOf(false) }
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(12.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    "${BoardColumn.DONE.title} (${state.done.size})",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                TextButton(onClick = { expanded = !expanded }) {
-                                    Text(if (expanded) "Ocultar" else "Ver")
-                                }
-                            }
-                            if (expanded) {
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    state.done.forEach { item ->
-                                        ProcedureCard(
-                                            item = item,
-                                            onMove = onMove,
-                                            modifier = Modifier.fillMaxWidth(),
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
                 }
             }
         }

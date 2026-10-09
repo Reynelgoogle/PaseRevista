@@ -27,7 +27,6 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /** Fila de la lista: tarjeta + datos para mostrar y compartir. */
@@ -121,25 +120,7 @@ class CamasViewModel(
             )
             try {
                 val journeyId = container.ensureDay(DEFAULT_SERVICE_ID)
-                val cards = container.caseCardRepository.observeByJourney(journeyId).first()
-                val rows = cards.map { card ->
-                    val patient = container.patientRepository.getPatient(card.patientId)
-                        ?: return@map null
-                    // El alta saca la tarjeta del listado (el historial se conserva).
-                    if (!isListedPatient(patient)) return@map null
-                    CardRow(
-                        card = card,
-                        patient = patient,
-                        openPendings = container.pendingRepository
-                            .getOpenByPatient(card.patientId),
-                        customFields = container.customFieldRepository
-                            .observeByPatient(card.patientId).first(),
-                        history = container.caseHistoryRepository
-                            .observeByPatient(card.patientId).first(),
-                    )
-                }.filterNotNull().sortedWith(
-                    compareBy({ it.card.bed.toIntOrNull() }, { it.card.bed }),
-                )
+                val rows = container.loadCardRows(journeyId)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isRefreshing = false,
