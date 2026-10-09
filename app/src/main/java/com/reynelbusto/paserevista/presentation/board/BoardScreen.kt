@@ -294,11 +294,19 @@ private fun ProcedureCard(
                     }
                 }
                 else -> {
-                    Text(
-                        "✓ Completado",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary,
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "✓ Completado",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary,
+                        )
+                        TextButton(onClick = { onMove(p.id, BoardColumn.SCHEDULED) }) {
+                            Text("← Programado")
+                        }
+                    }
                 }
             }
         }
