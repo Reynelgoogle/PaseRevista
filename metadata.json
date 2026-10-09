@@ -1,0 +1,6 @@
+{
+  "name": "Entrega de Guardia",
+  "description": "Gestión de pase de revista y entrega de guardia médica hospitalaria",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
