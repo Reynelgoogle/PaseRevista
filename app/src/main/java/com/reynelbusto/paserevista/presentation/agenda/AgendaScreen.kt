@@ -150,7 +150,7 @@ fun AgendaScreen(container: AppContainer) {
                             },
                             onToggleReady = {},
                             onSaveFields = {},
-                            onSavePatientDetails = { _, _, _, _, _, _, _, _ -> },
+                            onSavePatientDetails = { _, _, _, _, _, _, _ -> },
                             onAddCustomField = { _, _ -> },
                             onRenameCustomField = { _, _ -> },
                             onSetCustomFieldValue = { _, _ -> },
