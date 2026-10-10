@@ -28,6 +28,8 @@ data class PatientEntity(
     val sex: String?,
     @ColumnInfo(name = "hc_number") val hcNumber: String?,
     @ColumnInfo(name = "blood_group") val bloodGroup: String?,
+    /** Alergias (campo de seguridad). */
+    @ColumnInfo(name = "allergies") val allergies: String?,
     @ColumnInfo(name = "address") val address: String?,
     @ColumnInfo(name = "service_id") val serviceId: String,
     @ColumnInfo(name = "admission_date") val admissionDate: String,

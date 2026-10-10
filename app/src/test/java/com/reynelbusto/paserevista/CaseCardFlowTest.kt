@@ -153,6 +153,13 @@ private class FakeProcedures : ProcedureRepository {
                 (it.status == ProcedureState.PENDING || it.status == ProcedureState.PREPARATION)
         }
 
+    override suspend fun findPerformedByPatientInJourney(patientId: String, journeyId: String): Procedure? =
+        store.values.firstOrNull {
+            it.patientId == patientId &&
+                it.journeyId == journeyId &&
+                it.status == ProcedureState.PERFORMED
+        }
+
     override suspend fun create(procedure: Procedure): String {
         store[procedure.id] = procedure
         return procedure.id

@@ -95,6 +95,7 @@ interface ProcedureRepository {
     fun observeRecentPerformed(limit: Int = 50): Flow<List<Procedure>>
     suspend fun getProcedure(id: String): Procedure?
     suspend fun findActiveByPatient(patientId: String): Procedure?
+    suspend fun findPerformedByPatientInJourney(patientId: String, journeyId: String): Procedure?
     suspend fun create(procedure: Procedure): String
     suspend fun update(procedure: Procedure)
     suspend fun deleteByPatient(patientId: String)

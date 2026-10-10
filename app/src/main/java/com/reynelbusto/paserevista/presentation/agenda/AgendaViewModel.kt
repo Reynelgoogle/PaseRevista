@@ -6,10 +6,19 @@ import androidx.lifecycle.viewModelScope
 import com.reynelbusto.paserevista.core.Clock
 import com.reynelbusto.paserevista.core.IsoDate
 import com.reynelbusto.paserevista.di.AppContainer
+import com.reynelbusto.paserevista.domain.model.CustomField
 import com.reynelbusto.paserevista.domain.model.Journey
+import com.reynelbusto.paserevista.domain.model.Sex
+import com.reynelbusto.paserevista.domain.model.displayName
+import com.reynelbusto.paserevista.domain.usecase.CaseCardPatch
 import com.reynelbusto.paserevista.domain.usecase.DEFAULT_SERVICE_ID
+import com.reynelbusto.paserevista.domain.usecase.DischargeUseCase
+import com.reynelbusto.paserevista.domain.usecase.ShareFormatter
+import com.reynelbusto.paserevista.presentation.camas.CardActions
 import com.reynelbusto.paserevista.presentation.camas.CardRow
+import com.reynelbusto.paserevista.presentation.camas.DischargeConfirm
 import com.reynelbusto.paserevista.presentation.camas.loadCardRows
+import com.reynelbusto.paserevista.presentation.components.PendingFormData
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,22 +35,30 @@ data class AgendaDaySection(
     val rows: List<CardRow>,
     /** cardId → marca de continuidad. */
     val marks: Map<String, BedMark>,
+    /** Jornada de hoy: se edita siempre, sin pulsar "Corregir". */
+    val isToday: Boolean,
 )
 
 data class AgendaUiState(
     val isLoading: Boolean = true,
     val error: String? = null,
+    /** Error de una mutación (Snackbar): se limpia al mostrarlo. */
+    val actionError: String? = null,
     val sections: List<AgendaDaySection> = emptyList(),
     val canLoadMore: Boolean = false,
+    /** Sugerencias de diagnóstico al editar la tarjeta. */
+    val recentDiagnoses: List<String> = emptyList(),
+    /** Días pasados habilitados para edición ("Corregir día"). */
+    val editingJourneyIds: Set<String> = emptySet(),
+    /** Alta pendiente de confirmación explícita por P1 abiertos. */
+    val dischargeConfirm: DischargeConfirm? = null,
 )
 
 /**
  * Agenda: timeline vertical de los días, lo más nuevo arriba, como hojear
- * una libreta. Solo lectura: los días pasados se miran, no se editan
- * (para trabajar está Camas).
- *
- * Datos: `observeJourneys` (recientes primero) + filas por jornada con el
- * cargador compartido de Camas. Los días sin camas se omiten.
+ * una libreta. Permitir trabajar desde aquí: hoy es editable por defecto y
+ * cualquier día pasado se habilita con "Corregir día". Comparte con Camas
+ * el cargador de filas y las acciones clínicas (CardActions).
  */
 class AgendaViewModel(
     private val container: AppContainer,
@@ -55,10 +72,13 @@ class AgendaViewModel(
     private val _uiState = MutableStateFlow(AgendaUiState())
     val uiState: StateFlow<AgendaUiState> = _uiState
 
+    private val actions = CardActions(container)
+
     private var collectJob: Job? = null
     private var visibleCount = PAGE_SIZE
     private var journeys: List<Journey> = emptyList()
-    /** Caché por jornada: los días pasados son inmutables en la práctica. */
+
+    /** Caché por jornada: los días sin edición son inmutables en la práctica. */
     private val rowCache = mutableMapOf<String, List<CardRow>>()
 
     init {
@@ -146,12 +166,14 @@ class AgendaViewModel(
                     title = agendaDayTitle(journey.clinicalDate, today),
                     rows = rows,
                     marks = rows.associate { it.card.id to (bedMarks[it.card.bed] ?: BedMark.NEW) },
+                    isToday = journey.clinicalDate == today,
                 )
             }
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
                 sections = sections,
                 canLoadMore = journeys.size > visibleCount,
+                recentDiagnoses = container.caseCardRepository.recentDiagnoses(8),
             )
         } catch (e: Exception) {
             _uiState.value = _uiState.value.copy(
@@ -159,6 +181,124 @@ class AgendaViewModel(
                 error = e.message ?: "Error al cargar",
             )
         }
+    }
+
+    // ── Edición ────────────────────────────────────────────────────────────
+
+    /** Habilita/deshabilita la edición de un día pasado. */
+    fun toggleEditing(journeyId: String) {
+        val current = _uiState.value.editingJourneyIds
+        val next = if (journeyId in current) current - journeyId else current + journeyId
+        _uiState.value = _uiState.value.copy(editingJourneyIds = next)
+    }
+
+    /** Ejecuta una mutación, invalida la caché y reconstruye el timeline. */
+    private fun runAction(block: suspend () -> Unit) {
+        viewModelScope.launch {
+            try {
+                block()
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    actionError = e.message ?: "Error inesperado",
+                )
+            }
+            rowCache.clear()
+            rebuild()
+        }
+    }
+
+    fun addBed(bed: String) = runAction { container.addBed(bed) }
+
+    fun toggleReady(cardId: String) = runAction { actions.toggleReady(cardId) }
+
+    fun saveFields(cardId: String, patch: CaseCardPatch) =
+        runAction { actions.saveFields(cardId, patch) }
+
+    fun savePatientDetails(
+        patientId: String,
+        fullName: String?,
+        hcNumber: String?,
+        bloodGroup: String?,
+        allergies: String?,
+        address: String?,
+        mainDiagnosis: String?,
+        isOutOfService: Boolean?,
+        sex: Sex?,
+    ) = runAction {
+        actions.savePatientDetails(
+            patientId, fullName, hcNumber, bloodGroup, allergies, address, mainDiagnosis, isOutOfService, sex,
+        )
+    }
+
+    fun addCustomField(patientId: String, label: String, value: String) =
+        runAction { actions.addCustomField(patientId, label, value) }
+
+    fun renameCustomField(field: CustomField, newLabel: String) =
+        runAction { actions.renameCustomField(field, newLabel) }
+
+    fun setCustomFieldValue(field: CustomField, value: String) =
+        runAction { actions.setCustomFieldValue(field, value) }
+
+    fun deleteCustomField(field: CustomField) =
+        runAction { actions.deleteCustomField(field) }
+
+    fun addPending(patientId: String, form: PendingFormData) =
+        runAction { actions.addPending(patientId, form) }
+
+    fun completePending(pendingId: String) = runAction { actions.completePending(pendingId) }
+
+    fun deleteCase(patientId: String) = runAction { actions.deleteCase(patientId) }
+
+    fun dischargeBed(patientId: String) {
+        viewModelScope.launch {
+            try {
+                when (val check = actions.checkDischarge(patientId)) {
+                    is DischargeUseCase.Check.Ok -> runAction { actions.discharge(patientId) }
+                    is DischargeUseCase.Check.BlockedByP1 -> {
+                        _uiState.value = _uiState.value.copy(
+                            dischargeConfirm = DischargeConfirm(
+                                patientId = patientId,
+                                patientLabel = labelOf(patientId),
+                                blockingPendings = check.pendings,
+                            ),
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    actionError = e.message ?: "Error inesperado",
+                )
+            }
+        }
+    }
+
+    fun confirmDischarge() {
+        val confirm = _uiState.value.dischargeConfirm ?: return
+        _uiState.value = _uiState.value.copy(dischargeConfirm = null)
+        runAction { actions.discharge(confirm.patientId, force = true) }
+    }
+
+    fun dismissDischargeConfirm() {
+        _uiState.value = _uiState.value.copy(dischargeConfirm = null)
+    }
+
+    fun clearActionError() {
+        _uiState.value = _uiState.value.copy(actionError = null)
+    }
+
+    // ── Compartir / presentación ────────────────────────────────────────────
+
+    fun shareDayText(section: AgendaDaySection): String =
+        ShareFormatter.cardList(section.rows.map { it.shareData() }, prettyDayEs(section.date))
+
+    fun displayName(row: CardRow): String = row.patient.displayName(row.card.bed)
+
+    private fun labelOf(patientId: String): String {
+        val row = _uiState.value.sections
+            .asSequence()
+            .flatMap { it.rows.asSequence() }
+            .firstOrNull { it.patient.id == patientId }
+        return row?.let { displayName(it) } ?: "Cama ?"
     }
 
     class Factory(private val container: AppContainer) : ViewModelProvider.Factory {

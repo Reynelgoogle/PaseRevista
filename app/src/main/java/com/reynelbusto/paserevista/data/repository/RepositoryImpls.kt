@@ -321,6 +321,11 @@ class ProcedureRepositoryImpl(
             dao.findActiveByPatient(patientId)?.toDomain()
         }
 
+    override suspend fun findPerformedByPatientInJourney(patientId: String, journeyId: String): Procedure? =
+        run {
+            dao.findPerformedByPatientInJourney(patientId, journeyId)?.toDomain()
+        }
+
     override suspend fun create(procedure: Procedure): String = run {
         dao.insert(procedure.toEntity())
         procedure.id

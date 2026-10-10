@@ -100,6 +100,8 @@ class CamasViewModel(
     private val _uiState = MutableStateFlow(CamasUiState())
     val uiState: StateFlow<CamasUiState> = _uiState
 
+    private val actions = CardActions(container)
+
     init {
         refresh()
     }
@@ -154,53 +156,45 @@ class CamasViewModel(
 
     fun addBed(bed: String) = mutate { container.addBed(bed) }
 
-    fun toggleReady(cardId: String) = mutate { container.caseCards.toggleReady(cardId) }
+    fun toggleReady(cardId: String) = mutate { actions.toggleReady(cardId) }
 
     fun saveFields(cardId: String, patch: CaseCardPatch) =
-        mutate { container.caseCards.updateFields(cardId, patch) }
+        mutate { actions.saveFields(cardId, patch) }
 
     fun savePatientDetails(
         patientId: String,
         fullName: String?,
         hcNumber: String?,
         bloodGroup: String?,
+        allergies: String?,
         address: String?,
         mainDiagnosis: String?,
         isOutOfService: Boolean?,
         sex: Sex?,
     ) = mutate {
-        container.caseCards.updatePatientDetails(
-            patientId, fullName, hcNumber, bloodGroup, address, mainDiagnosis, isOutOfService, sex,
+        actions.savePatientDetails(
+            patientId, fullName, hcNumber, bloodGroup, allergies, address, mainDiagnosis, isOutOfService, sex,
         )
     }
 
     fun addCustomField(patientId: String, label: String, value: String) =
-        mutate { container.customFields.add(patientId, label, value) }
+        mutate { actions.addCustomField(patientId, label, value) }
 
     fun renameCustomField(field: CustomField, newLabel: String) =
-        mutate { container.customFields.rename(field.id, field.patientId, newLabel, field) }
+        mutate { actions.renameCustomField(field, newLabel) }
 
     fun setCustomFieldValue(field: CustomField, value: String) =
-        mutate { container.customFields.setValue(field.id, value, field) }
+        mutate { actions.setCustomFieldValue(field, value) }
 
     fun deleteCustomField(field: CustomField) =
-        mutate { container.customFields.delete(field.id, field.patientId, field.label) }
+        mutate { actions.deleteCustomField(field) }
 
     fun addPending(patientId: String, form: PendingFormData) = mutate {
-        container.pendings.create(
-            patientId = patientId,
-            description = form.description,
-            type = form.type,
-            priority = form.priority,
-            dueDate = form.dueDate?.ifBlank { null },
-            assignee = form.assignee?.ifBlank { null },
-            serviceDest = form.serviceDest?.ifBlank { null },
-            interconsultNote = form.note?.ifBlank { null },
-        )
+        actions.addPending(patientId, form)
     }
 
     fun completePending(pendingId: String) = mutate {
-        container.pendings.complete(pendingId, journeyResolutionId = null)
+        actions.completePending(pendingId)
     }
 
     /**
@@ -211,9 +205,9 @@ class CamasViewModel(
     fun dischargeBed(patientId: String) {
         viewModelScope.launch {
             try {
-                when (val check = container.discharge.check(patientId)) {
+                when (val check = actions.checkDischarge(patientId)) {
                     is DischargeUseCase.Check.Ok -> mutate {
-                        container.discharge.discharge(patientId)
+                        actions.discharge(patientId)
                     }
                     is DischargeUseCase.Check.BlockedByP1 -> {
                         val row = _uiState.value.rows.firstOrNull { it.patient.id == patientId }
@@ -237,7 +231,7 @@ class CamasViewModel(
     fun confirmDischarge() {
         val confirm = _uiState.value.dischargeConfirm ?: return
         _uiState.value = _uiState.value.copy(dischargeConfirm = null)
-        mutate { container.discharge.discharge(confirm.patientId, force = true) }
+        mutate { actions.discharge(confirm.patientId, force = true) }
     }
 
     fun dismissDischargeConfirm() {
@@ -246,7 +240,7 @@ class CamasViewModel(
 
     /** Borrado total del caso ("se cargó por error"). */
     fun deleteCase(patientId: String) = mutate {
-        container.deleteCase.invoke(patientId)
+        actions.deleteCase(patientId)
     }
 
     fun clearError() {

@@ -66,7 +66,7 @@ class AppContainer(context: Context) {
             appContext,
             PaseRevistaDatabase::class.java,
             DATABASE_NAME,
-        ).addMigrations(MIGRATION_1_2).build()
+        ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
 
     /**
      * Cierra Room para poder reemplazar el archivo .db (restaurar respaldo).

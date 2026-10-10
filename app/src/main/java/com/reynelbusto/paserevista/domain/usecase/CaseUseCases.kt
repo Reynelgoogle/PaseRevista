@@ -205,17 +205,12 @@ class CaseCardUseCase(
         updated.ready
     }
 
-    /** Datos del paciente (desplegable): todo opcional, sin requires. */
-    /**
-     * Semántica uniforme (M2): null = LIMPIAR el campo. El diálogo parte de
-     * los valores actuales, así que lo que llega null fue borrado por el
-     * usuario; lo que no se tocó llega con su valor actual.
-     */
     suspend fun updatePatientDetails(
         patientId: String,
         fullName: String?,
         hcNumber: String?,
         bloodGroup: String?,
+        allergies: String?,
         address: String?,
         mainDiagnosis: String?,
         isOutOfService: Boolean?,
@@ -226,6 +221,7 @@ class CaseCardUseCase(
             fullName = fullName?.trim()?.ifBlank { null },
             hcNumber = hcNumber?.trim()?.ifBlank { null },
             bloodGroup = bloodGroup?.trim()?.ifBlank { null },
+            allergies = allergies?.trim()?.ifBlank { null },
             address = address?.trim()?.ifBlank { null },
             mainDiagnosis = mainDiagnosis?.trim()?.ifBlank { null },
             isOutOfService = isOutOfService ?: patient.isOutOfService,
@@ -239,6 +235,7 @@ class CaseCardUseCase(
         field("Nombre", patient.fullName, updated.fullName)
         field("HC", patient.hcNumber, updated.hcNumber)
         field("Grupo sanguíneo", patient.bloodGroup, updated.bloodGroup)
+        field("Alergias", patient.allergies, updated.allergies)
         field("Dirección", patient.address, updated.address)
         field("Diagnóstico", patient.mainDiagnosis, updated.mainDiagnosis)
         if (patient.isOutOfService != updated.isOutOfService) {
@@ -376,6 +373,11 @@ class BoardUseCase(
     /** La tarjeta marcada Listo asegura su procedimiento en Propuesto. */
     suspend fun ensureFromCard(card: CaseCard) = unitOfWork.atomic {
         if (procedures.findActiveByPatient(card.patientId) != null) return@atomic
+        // Si ya se realizó ese mismo día, no se recrea: re-marcar Listo tras
+        // un Realizado no debe duplicar el procedimiento en la pizarra.
+        if (procedures.findPerformedByPatientInJourney(card.patientId, card.journeyId) != null) {
+            return@atomic
+        }
         val now = clock.nowMillis()
         procedures.create(
             Procedure(
@@ -400,7 +402,16 @@ class BoardUseCase(
 
     suspend fun moveTo(procedureId: String, column: BoardColumn) = unitOfWork.atomic {
         val procedure = procedures.getProcedure(procedureId) ?: error("Procedimiento no encontrado")
-        procedures.update(procedure.copy(status = column.state))
+        val updated = procedure.copy(
+            status = column.state,
+            // Al caer en Realizado se sella la hora (ordena la pizarra).
+            performedAt = if (column == BoardColumn.DONE) {
+                clock.nowMillis()
+            } else {
+                procedure.performedAt
+            },
+        )
+        procedures.update(updated)
         history.log(
             procedure.patientId, null,
             "En pizarra: ${procedure.kind} → ${column.title}",

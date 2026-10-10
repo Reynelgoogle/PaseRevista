@@ -387,6 +387,17 @@ interface ProcedureDao {
            ORDER BY created_at DESC LIMIT 1""",
     )
     suspend fun findActiveByPatient(patientId: String): ProcedureEntity?
+
+    /** Procedimiento ya realizado por el paciente en una jornada (evita duplicados). */
+    @Query(
+        """SELECT * FROM `procedure`
+           WHERE patient_id = :patientId AND journey_id = :journeyId AND status = 'performed'
+           ORDER BY created_at DESC LIMIT 1""",
+    )
+    suspend fun findPerformedByPatientInJourney(
+        patientId: String,
+        journeyId: String,
+    ): ProcedureEntity?
 }
 
 @Dao
