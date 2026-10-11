@@ -18,11 +18,19 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
-/** Una "página" de la agenda: un día con sus camas. */
+/** Una "página" de la agenda: un día con su bitácora y sus camas. */
 data class AgendaDaySection(
     val journeyId: String,
     val date: IsoDate,
     val title: String,
+    /** true si es el día de hoy (para resaltar en la tira de fechas). */
+    val isToday: Boolean,
+    /** "12 camas · 2 ingresos · 1 alta · 4 pendientes". */
+    val summary: String,
+    /** Nota libre del día. NULL = sin nota. */
+    val note: String?,
+    /** "Lo que pasó": eventos del día en orden cronológico. */
+    val events: List<DayEvent>,
     val rows: List<CardRow>,
     /** cardId → marca de continuidad. */
     val marks: Map<String, BedMark>,
@@ -60,6 +68,8 @@ class AgendaViewModel(
     private var journeys: List<Journey> = emptyList()
     /** Caché por jornada: los días pasados son inmutables en la práctica. */
     private val rowCache = mutableMapOf<String, List<CardRow>>()
+    /** Caché de la bitácora por jornada (solo días pasados; hoy siempre se recarga). */
+    private val eventCache = mutableMapOf<String, List<DayEvent>>()
 
     init {
         subscribe()
@@ -117,6 +127,27 @@ class AgendaViewModel(
         viewModelScope.launch { rebuild() }
     }
 
+    /**
+     * Guarda la nota libre del día. Es la única edición permitida en la
+     * agenda (las tarjetas siguen siendo de solo lectura). Vacía la limpia.
+     */
+    fun saveNote(journeyId: String, note: String?) {
+        viewModelScope.launch {
+            try {
+                val clean = note?.trim()?.ifBlank { null }
+                container.journeyRepository.setNote(journeyId, clean)
+                journeys = journeys.map { j ->
+                    if (j.id == journeyId) j.copy(note = clean) else j
+                }
+                rebuild()
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    error = e.message ?: "No se pudo guardar la nota",
+                )
+            }
+        }
+    }
+
     private suspend fun rebuild() {
         val firstLoad = _uiState.value.sections.isEmpty()
         _uiState.value = _uiState.value.copy(
@@ -130,20 +161,47 @@ class AgendaViewModel(
                 val rows = rowCache.getOrPut(journey.id) {
                     container.loadCardRows(journey.id, onlyActive = false)
                 }
-                // Días sin camas: se omiten, sin ruido.
-                if (rows.isEmpty()) null else journey to rows
+                val bedByPatient = rows.associate { it.patient.id to it.card.bed }
+                // Hoy se recarga siempre (la bitácora cambia con el trabajo del día).
+                val events = if (journey.clinicalDate == today) {
+                    eventCache.remove(journey.id)
+                    buildDayEvents(
+                        container.caseHistoryRepository.getByJourney(journey.id),
+                        bedByPatient,
+                    )
+                } else {
+                    eventCache.getOrPut(journey.id) {
+                        buildDayEvents(
+                            container.caseHistoryRepository.getByJourney(journey.id),
+                            bedByPatient,
+                        )
+                    }
+                }
+                // Días sin camas ni eventos: se omiten, sin ruido.
+                if (rows.isEmpty() && events.isEmpty()) null
+                else Triple(journey, rows, events)
             }
             val marksByDate = computeDayMarks(
-                withRows.map { (journey, rows) ->
+                withRows.map { (journey, rows, _) ->
                     AgendaDayInput(journey.clinicalDate, rows.map { it.card.bed }.toSet())
                 },
             )
-            val sections = withRows.map { (journey, rows) ->
+            val sections = withRows.map { (journey, rows, events) ->
                 val bedMarks = marksByDate[journey.clinicalDate].orEmpty()
+                val altas = rows.count { it.patient.dischargeDate == journey.clinicalDate }
                 AgendaDaySection(
                     journeyId = journey.id,
                     date = journey.clinicalDate,
                     title = agendaDayTitle(journey.clinicalDate, today),
+                    isToday = journey.clinicalDate == today,
+                    summary = daySummary(
+                        camas = rows.size,
+                        ingresos = events.count { it.type == DayEventType.INGRESO },
+                        altas = altas,
+                        pendientes = rows.sumOf { it.openPendings.size },
+                    ),
+                    note = journey.note,
+                    events = events,
                     rows = rows,
                     marks = rows.associate { it.card.id to (bedMarks[it.card.bed] ?: BedMark.NEW) },
                 )

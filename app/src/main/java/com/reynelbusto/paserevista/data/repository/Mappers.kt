@@ -176,6 +176,7 @@ internal fun JourneyEntity.toDomain(): Journey = Journey(
     origin = origin.toJourneyOrigin(),
     roundCompletedAt = roundCompletedAt,
     reviewSummary = reviewSummary,
+    note = note,
     createdAt = createdAt,
     updatedAt = updatedAt,
 )
@@ -188,6 +189,7 @@ internal fun Journey.toEntity(): JourneyEntity = JourneyEntity(
     origin = origin.code,
     roundCompletedAt = roundCompletedAt,
     reviewSummary = reviewSummary,
+    note = note,
     createdAt = createdAt,
     updatedAt = updatedAt,
 )

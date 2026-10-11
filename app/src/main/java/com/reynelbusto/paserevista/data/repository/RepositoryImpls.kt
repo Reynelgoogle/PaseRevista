@@ -144,6 +144,10 @@ class JourneyRepositoryImpl(
 
     override fun observeJourneys(serviceId: String): Flow<List<Journey>> =
         dao.observeAllByService(serviceId).map { list -> list.map { it.toDomain() } }
+
+    override suspend fun setNote(journeyId: String, note: String?) = run {
+        dao.setNote(journeyId, note, clock.nowMillis())
+    }
 }
 
 class DailyRecordRepositoryImpl(
@@ -456,5 +460,10 @@ class CaseHistoryRepositoryImpl(
                     summary = summary,
                 ),
             )
+        }
+
+    override suspend fun getByJourney(journeyId: String): List<CaseHistoryEntry> =
+        run {
+            dao.getByJourney(journeyId).map { it.toDomain() }
         }
 }

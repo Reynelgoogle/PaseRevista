@@ -135,7 +135,10 @@ data class CustomFieldEntity(
             onDelete = ForeignKey.CASCADE,
         ),
     ],
-    indices = [Index(value = ["patient_id", "occurred_at"])],
+    indices = [
+        Index(value = ["patient_id", "occurred_at"]),
+        Index(value = ["journey_id", "occurred_at"]),
+    ],
 )
 data class CaseHistoryEntity(
     @PrimaryKey val id: String,
@@ -163,6 +166,8 @@ data class JourneyEntity(
     @ColumnInfo(name = "review_summary") val reviewSummary: String?,
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
+    /** Nota libre del día (agenda): un renglón por jornada. NULL = sin nota. */
+    @ColumnInfo(name = "note") val note: String? = null,
 )
 
 @Entity(

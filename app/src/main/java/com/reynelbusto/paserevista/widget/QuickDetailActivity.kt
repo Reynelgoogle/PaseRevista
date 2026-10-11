@@ -46,6 +46,7 @@ import com.reynelbusto.paserevista.MainActivity
 import com.reynelbusto.paserevista.PaseRevistaApp
 import com.reynelbusto.paserevista.domain.model.CaseCard
 import com.reynelbusto.paserevista.domain.model.Pending
+import com.reynelbusto.paserevista.domain.usecase.DEFAULT_SERVICE_ID
 import com.reynelbusto.paserevista.presentation.theme.PaseRevistaTheme
 import java.util.UUID
 import kotlinx.coroutines.launch
@@ -201,7 +202,8 @@ private fun QuickDetailScreen(cardId: String, onClose: () -> Unit) {
                                         try {
                                             container.pendings.complete(
                                                 pending.id,
-                                                journeyResolutionId = null,
+                                                journeyResolutionId =
+                                                    container.ensureDay(DEFAULT_SERVICE_ID),
                                             )
                                         } catch (e: Exception) {
                                             toast("No se pudo completar")

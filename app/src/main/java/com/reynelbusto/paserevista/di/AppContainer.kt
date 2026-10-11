@@ -10,6 +10,7 @@ import com.reynelbusto.paserevista.data.backup.WalCheckpointResult
 import com.reynelbusto.paserevista.data.local.DATABASE_NAME
 import com.reynelbusto.paserevista.data.local.DatabaseUnitOfWork
 import com.reynelbusto.paserevista.data.local.MIGRATION_1_2
+import com.reynelbusto.paserevista.data.local.MIGRATION_2_3
 import com.reynelbusto.paserevista.data.local.PaseRevistaDatabase
 import com.reynelbusto.paserevista.data.local.SCHEMA_VERSION
 import com.reynelbusto.paserevista.data.repository.CaseCardRepositoryImpl
@@ -66,7 +67,7 @@ class AppContainer(context: Context) {
             appContext,
             PaseRevistaDatabase::class.java,
             DATABASE_NAME,
-        ).addMigrations(MIGRATION_1_2).build()
+        ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
 
     /**
      * Cierra Room para poder reemplazar el archivo .db (restaurar respaldo).
@@ -120,7 +121,10 @@ class AppContainer(context: Context) {
     val customFields = CustomFieldUseCase(
         unitOfWork, customFieldRepository, caseHistoryRepository, clock,
     )
-    val discharge = DischargeUseCase(unitOfWork, patientRepository, pendingRepository, procedureRepository, clock)
+    val discharge = DischargeUseCase(
+        unitOfWork, patientRepository, pendingRepository, procedureRepository,
+        caseHistoryRepository, journeyRepository, clock,
+    )
     val deleteCase = DeleteCaseUseCase(
         unitOfWork, patientRepository, caseCardRepository, customFieldRepository,
         pendingRepository, procedureRepository, dailyRecordRepository,
@@ -128,7 +132,7 @@ class AppContainer(context: Context) {
     )
 
     // Módulos clínicos
-    val pendings = PendingUseCase(pendingRepository, clock)
+    val pendings = PendingUseCase(pendingRepository, caseHistoryRepository, clock)
     val treatments = TreatmentUseCase(unitOfWork, treatmentRepository, clock)
     val devices = DeviceUseCase(deviceRepository, clock)
     val results = ResultUseCase(resultRepository, clock)

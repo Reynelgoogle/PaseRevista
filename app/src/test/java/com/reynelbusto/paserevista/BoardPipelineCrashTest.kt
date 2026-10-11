@@ -110,6 +110,8 @@ private class CrashHistory : CaseHistoryRepository {
     override fun observeByPatient(patientId: String): Flow<List<com.reynelbusto.paserevista.domain.model.CaseHistoryEntry>> =
         MutableStateFlow(emptyList())
     override suspend fun log(patientId: String, journeyId: String?, summary: String) {}
+    override suspend fun getByJourney(journeyId: String): List<com.reynelbusto.paserevista.domain.model.CaseHistoryEntry> =
+        emptyList()
 }
 
 class BoardPipelineCrashTest {

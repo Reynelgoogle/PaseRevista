@@ -200,7 +200,9 @@ class CamasViewModel(
     }
 
     fun completePending(pendingId: String) = mutate {
-        container.pendings.complete(pendingId, journeyResolutionId = null)
+        // La jornada de resolución alimenta la bitácora de la agenda.
+        val journeyId = container.ensureDay(DEFAULT_SERVICE_ID)
+        container.pendings.complete(pendingId, journeyResolutionId = journeyId)
     }
 
     /**

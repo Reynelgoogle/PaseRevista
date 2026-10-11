@@ -36,9 +36,10 @@ import com.reynelbusto.paserevista.data.local.entity.TreatmentEventEntity
  * v2 (pivot entrega de guardia): `patient` permite nulos en datos personales
  * (REGLA DE ORO: nada obligatorio) + columna `address`; nuevas tablas
  * `case_card`, `custom_field`, `case_history`.
+ * v3 (agenda bitácora): columna `note` en `journey` (nota libre del día).
  */
 const val DATABASE_NAME = "paserevista.db"
-const val SCHEMA_VERSION = 2
+const val SCHEMA_VERSION = 3
 @Database(
     entities = [
         PatientEntity::class,
@@ -229,6 +230,25 @@ val MIGRATION_1_2: Migration = object : Migration(1, 2) {
         db.execSQL(
             "CREATE INDEX index_case_history_patient_id_occurred_at " +
                 "ON case_history(patient_id, occurred_at)",
+        )
+    }
+}
+
+/**
+ * Migración 2 → 3 (agenda bitácora): columna `note` en `journey`
+ * (nota libre del día, NULL = sin nota).
+ *
+ * Añadir una columna NULLABLE con ALTER TABLE es seguro: no toca datos
+ * existentes, no rompe FKs ni índices. Verificada en SQLite real.
+ */
+val MIGRATION_2_3: Migration = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE journey ADD COLUMN note TEXT")
+        // Índice que la entidad v3 declara para la bitácora por jornada
+        // (Room valida los índices al abrir la base).
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_case_history_journey_id_occurred_at " +
+                "ON case_history(journey_id, occurred_at)",
         )
     }
 }

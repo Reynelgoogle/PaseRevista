@@ -91,6 +91,10 @@ private class FakeJourneys(private val clock: Clock) : JourneyRepository {
     override suspend fun findPreviousJourney(serviceId: String, clinicalDate: String): Journey? = null
     override fun observeJourneys(serviceId: String): Flow<List<Journey>> =
         MutableStateFlow(store.values.toList())
+
+    override suspend fun setNote(journeyId: String, note: String?) {
+        store[journeyId]?.let { store[journeyId] = it.copy(note = note) }
+    }
 }
 
 private class FakeCards : CaseCardRepository {
@@ -140,6 +144,9 @@ private class FakeHistory : CaseHistoryRepository {
     override suspend fun log(patientId: String, journeyId: String?, summary: String) {
         entries += CaseHistoryEntry("h${entries.size}", patientId, journeyId, 0L, summary)
     }
+
+    override suspend fun getByJourney(journeyId: String): List<CaseHistoryEntry> =
+        entries.filter { it.journeyId == journeyId }.sortedBy { it.occurredAt }
 }
 
 private class FakeProcedures : ProcedureRepository {
@@ -230,6 +237,19 @@ class CaseCardFlowTest {
         assertEquals("3", cardNueva.bed)
         // La tarjeta del dado de alta sigue existiendo (historial).
         assertNotNull(cards.getByPatientAndJourney(primero, "j-2026-10-06"))
+    }
+
+    @Test
+    fun `nota del dia se guarda y se limpia`() = runTest {
+        val j = journeys.getOrCreateJourney("urology", "2026-10-11", "auto")
+        assertEquals(null, j.note)
+        journeys.setNote(j.id, "hoy faltó el anestesista")
+        assertEquals(
+            "hoy faltó el anestesista",
+            journeys.getJourney("urology", "2026-10-11")?.note,
+        )
+        journeys.setNote(j.id, null)
+        assertEquals(null, journeys.getJourney("urology", "2026-10-11")?.note)
     }
 
     @Test

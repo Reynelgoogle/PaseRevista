@@ -98,6 +98,8 @@ data class Journey(
     /** Hito informativo "pase completado". NULL = en curso. No es un estado bloqueante. */
     val roundCompletedAt: Long? = null,
     val reviewSummary: String? = null,
+    /** Nota libre del día (agenda): un renglón por jornada. NULL = sin nota. */
+    val note: String? = null,
     val createdAt: Long,
     val updatedAt: Long,
 )
