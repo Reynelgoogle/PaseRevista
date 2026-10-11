@@ -426,6 +426,10 @@ interface CaseCardDao {
     @Query("SELECT * FROM case_card WHERE journey_id = :journeyId AND bed = :bed LIMIT 1")
     suspend fun findByJourneyAndBed(journeyId: String, bed: String): CaseCardEntity?
 
+    /** Todas las tarjetas de una cama en una jornada (una cama puede reutilizarse tras un alta). */
+    @Query("SELECT * FROM case_card WHERE journey_id = :journeyId AND bed = :bed")
+    suspend fun findAllByJourneyAndBed(journeyId: String, bed: String): List<CaseCardEntity>
+
     /** Conteos para el sidecar del respaldo. */
     @Query("SELECT COUNT(*) FROM case_card")
     suspend fun countAll(): Int

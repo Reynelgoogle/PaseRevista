@@ -109,6 +109,8 @@ interface CaseCardRepository {
     suspend fun findLatestByPatient(patientId: String): CaseCard?
     /** Tarjeta de una cama en una jornada (validar duplicados, M3). */
     suspend fun findByJourneyAndBed(journeyId: String, bed: String): CaseCard?
+    /** Todas las tarjetas de una cama en una jornada (la cama se reutiliza tras un alta). */
+    suspend fun findAllByJourneyAndBed(journeyId: String, bed: String): List<CaseCard>
     suspend fun create(card: CaseCard): String
     suspend fun update(card: CaseCard)
     suspend fun deleteByPatient(patientId: String)

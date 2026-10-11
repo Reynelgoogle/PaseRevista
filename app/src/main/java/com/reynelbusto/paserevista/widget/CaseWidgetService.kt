@@ -6,6 +6,7 @@ import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import com.reynelbusto.paserevista.PaseRevistaApp
 import com.reynelbusto.paserevista.R
+import com.reynelbusto.paserevista.domain.model.PatientState
 import com.reynelbusto.paserevista.domain.model.displayName
 import com.reynelbusto.paserevista.domain.usecase.DEFAULT_SERVICE_ID
 import kotlinx.coroutines.flow.first
@@ -43,11 +44,13 @@ private class CaseViewsFactory(private val context: Context) : RemoteViewsServic
                 val c = container()
                 val journeyId = c.ensureDay(DEFAULT_SERVICE_ID)
                 val cards = c.caseCardRepository.observeByJourney(journeyId).first()
-                cards.map { card ->
+                cards.mapNotNull { card ->
+                    // El alta saca la tarjeta del widget (no mostrar dados de alta como activos).
                     val patient = c.patientRepository.getPatient(card.patientId)
+                    if (patient?.status != PatientState.ACTIVE) return@mapNotNull null
                     WidgetRow(
                         bed = card.bed,
-                        name = patient?.displayName(card.bed) ?: "Cama ${card.bed}",
+                        name = patient.displayName(card.bed),
                         ready = card.ready,
                     )
                 }.sortedWith(compareBy({ it.bed.toIntOrNull() }, { it.bed }))

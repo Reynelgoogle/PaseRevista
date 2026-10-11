@@ -80,6 +80,7 @@ private open class DelCards(val patientIds: MutableSet<String>) : CaseCardReposi
         patientIds.remove(patientId)
     }
     override suspend fun findByJourneyAndBed(journeyId: String, bed: String) = null
+    override suspend fun findAllByJourneyAndBed(journeyId: String, bed: String): List<com.reynelbusto.paserevista.domain.model.CaseCard> = emptyList()
     override suspend fun recentDiagnoses(limit: Int): List<String> = emptyList()
 }
 

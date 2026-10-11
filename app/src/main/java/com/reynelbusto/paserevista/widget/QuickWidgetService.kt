@@ -7,6 +7,7 @@ import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import com.reynelbusto.paserevista.PaseRevistaApp
 import com.reynelbusto.paserevista.R
+import com.reynelbusto.paserevista.domain.model.PatientState
 import com.reynelbusto.paserevista.domain.usecase.DEFAULT_SERVICE_ID
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -50,7 +51,10 @@ private class QuickViewsFactory(private val context: Context) :
                 val c = container()
                 val journeyId = c.ensureDay(DEFAULT_SERVICE_ID)
                 val cards = c.caseCardRepository.observeByJourney(journeyId).first()
-                cards.map { card ->
+                cards.mapNotNull { card ->
+                    // El alta saca la tarjeta del widget (no mostrar dados de alta como activos).
+                    val patient = c.patientRepository.getPatient(card.patientId)
+                    if (patient?.status != PatientState.ACTIVE) return@mapNotNull null
                     val open = c.pendingRepository.getOpenByPatient(card.patientId).size
                     QuickRow(
                         cardId = card.id,

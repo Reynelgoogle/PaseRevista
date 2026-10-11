@@ -7,6 +7,7 @@ import com.reynelbusto.paserevista.domain.model.CaseHistoryEntry
 import com.reynelbusto.paserevista.domain.model.Journey
 import com.reynelbusto.paserevista.domain.model.JourneyOrigin
 import com.reynelbusto.paserevista.domain.model.Patient
+import com.reynelbusto.paserevista.domain.model.PatientState
 import com.reynelbusto.paserevista.domain.model.Procedure
 import com.reynelbusto.paserevista.domain.model.ProcedureState
 import com.reynelbusto.paserevista.domain.repository.CaseCardRepository
@@ -24,8 +25,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 private class FakeClock : Clock {
@@ -122,7 +126,10 @@ private class FakeCards : CaseCardRepository {
 
     override suspend fun recentDiagnoses(limit: Int): List<String> =
         store.values.mapNotNull { it.diagnosis?.ifBlank { null } }.distinct().take(limit)
-    override suspend fun findByJourneyAndBed(journeyId: String, bed: String): com.reynelbusto.paserevista.domain.model.CaseCard? = null
+    override suspend fun findByJourneyAndBed(journeyId: String, bed: String): com.reynelbusto.paserevista.domain.model.CaseCard? =
+        findAllByJourneyAndBed(journeyId, bed).firstOrNull()
+    override suspend fun findAllByJourneyAndBed(journeyId: String, bed: String): List<com.reynelbusto.paserevista.domain.model.CaseCard> =
+        store.values.filter { it.journeyId == journeyId && it.bed == bed }
 }
 
 private class FakeHistory : CaseHistoryRepository {
@@ -197,6 +204,32 @@ class CaseCardFlowTest {
     @Test(expected = IllegalArgumentException::class)
     fun `cama vacia falla`() = runTest {
         addBed("   ")
+    }
+
+    @Test
+    fun `cama ocupada por paciente activo no se duplica`() = runTest {
+        addBed("5")
+        try {
+            addBed("5")
+            fail("debió fallar: la cama 5 está ocupada")
+        } catch (e: IllegalStateException) {
+            assertTrue(e.message!!.contains("ya está ocupada hoy"))
+        }
+    }
+
+    @Test
+    fun `cama liberada por alta se reutiliza el mismo dia`() = runTest {
+        val primero = addBed("3")
+        // Alta: el paciente sale del censo pero su tarjeta se conserva.
+        val dado = patients.getPatient(primero)!!
+        patients.updatePatient(dado.copy(status = PatientState.DISCHARGED))
+        // Ingresar otro paciente en la misma cama el mismo día: permitido.
+        val segundo = addBed("3")
+        assertNotEquals(primero, segundo)
+        val cardNueva = cards.getByPatientAndJourney(segundo, "j-2026-10-06")!!
+        assertEquals("3", cardNueva.bed)
+        // La tarjeta del dado de alta sigue existiendo (historial).
+        assertNotNull(cards.getByPatientAndJourney(primero, "j-2026-10-06"))
     }
 
     @Test

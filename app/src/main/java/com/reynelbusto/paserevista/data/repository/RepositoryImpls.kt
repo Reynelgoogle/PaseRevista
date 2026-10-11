@@ -374,6 +374,11 @@ class CaseCardRepositoryImpl(
             dao.findByJourneyAndBed(journeyId, bed)?.toDomain()
         }
 
+    override suspend fun findAllByJourneyAndBed(journeyId: String, bed: String): List<CaseCard> =
+        run {
+            dao.findAllByJourneyAndBed(journeyId, bed).map { it.toDomain() }
+        }
+
     override suspend fun create(card: CaseCard): String = run {
         dao.insert(card.toEntity())
         card.id

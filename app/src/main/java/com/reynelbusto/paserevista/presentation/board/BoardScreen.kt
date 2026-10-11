@@ -10,7 +10,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -18,6 +21,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -27,14 +33,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 import com.reynelbusto.paserevista.di.AppContainer
 import com.reynelbusto.paserevista.domain.model.BoardColumn
 import com.reynelbusto.paserevista.domain.usecase.BoardItem
@@ -91,6 +100,13 @@ fun BoardScreen(container: AppContainer) {
     }
 }
 
+/** Vistas de la pizarra. Por defecto Panel (la experiencia actual no cambia). */
+private enum class BoardView(val title: String) {
+    LIST("Lista"),
+    PANEL("Panel"),
+    CALENDAR("Calendario"),
+}
+
 @Composable
 private fun BoardContent(
     state: BoardUiState,
@@ -106,6 +122,53 @@ private fun BoardContent(
         )
         return
     }
+    // rememberSaveable no persiste enums: se guarda el ordinal.
+    var viewOrdinal by rememberSaveable { mutableIntStateOf(BoardView.PANEL.ordinal) }
+    Column(modifier = modifier.fillMaxSize()) {
+        SingleChoiceSegmentedButtonRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+        ) {
+            BoardView.entries.forEachIndexed { index, view ->
+                SegmentedButton(
+                    selected = index == viewOrdinal,
+                    onClick = { viewOrdinal = index },
+                    shape = SegmentedButtonDefaults.itemShape(
+                        index = index,
+                        count = BoardView.entries.size,
+                    ),
+                    label = { Text(view.title) },
+                )
+            }
+        }
+        when (BoardView.entries[viewOrdinal]) {
+            BoardView.PANEL -> BoardPanelView(
+                state = state,
+                onMove = onMove,
+                modifier = Modifier.fillMaxSize(),
+            )
+            BoardView.LIST -> BoardListView(
+                state = state,
+                onMove = onMove,
+                modifier = Modifier.fillMaxSize(),
+            )
+            BoardView.CALENDAR -> BoardCalendarView(
+                state = state,
+                onMove = onMove,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+/** Panel: el Kanban actual, intacto (responsivo ancho/teléfono como siempre). */
+@Composable
+private fun BoardPanelView(
+    state: BoardUiState,
+    onMove: (String, BoardColumn) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val wide = maxWidth > 600.dp
         if (wide) {
@@ -138,63 +201,120 @@ private fun BoardContent(
                 )
             }
         } else {
-            // Teléfono: columnas apiladas con secciones colapsables.
+            // Teléfono: Kanban auténtico tipo Trello — 3 páginas de ancho
+            // completo con swipe horizontal (antes: columnas apiladas, casi
+            // idénticas a la vista Lista).
+            BoardPagerView(
+                state = state,
+                onMove = onMove,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+/**
+ * Panel en teléfono: Kanban real tipo Trello. Tres páginas de ancho completo
+ * (Propuesto → Programado → Realizado) con desplazamiento horizontal; cada
+ * página desplaza su propia lista vertical de tarjetas.
+ */
+@Composable
+private fun BoardPagerView(
+    state: BoardUiState,
+    onMove: (String, BoardColumn) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val pages = listOf(
+        BoardColumn.PROPOSED to state.proposed,
+        BoardColumn.SCHEDULED to state.scheduled,
+        BoardColumn.DONE to state.done,
+    )
+    val pagerState = rememberPagerState(pageCount = { pages.size })
+    val scope = rememberCoroutineScope()
+    Column(modifier = modifier.fillMaxSize()) {
+        // Indicador de páginas: títulos con contador, tocables.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            pages.forEachIndexed { index, (column, items) ->
+                val selected = pagerState.currentPage == index
+                TextButton(onClick = {
+                    scope.launch { pagerState.animateScrollToPage(index) }
+                }) {
+                    Text(
+                        "${column.title} (${items.size})",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                        color = if (selected) MaterialTheme.colorScheme.primary
+                        else TextSecondary,
+                    )
+                }
+            }
+        }
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+        ) { page ->
+            val (_, items) = pages[page]
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                item {
-                    BoardColumnView(
-                        column = BoardColumn.PROPOSED,
-                        items = state.proposed,
+                items(items, key = { it.procedure.id }) { item ->
+                    ProcedureCard(
+                        item = item,
                         onMove = onMove,
                         modifier = Modifier.fillMaxWidth(),
-                        scrollable = false,
                     )
-                }
-                item {
-                    BoardColumnView(
-                        column = BoardColumn.SCHEDULED,
-                        items = state.scheduled,
-                        onMove = onMove,
-                        modifier = Modifier.fillMaxWidth(),
-                        scrollable = false,
-                    )
-                }
-                item {
-                    var expanded by remember { mutableStateOf(false) }
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(12.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    "${BoardColumn.DONE.title} (${state.done.size})",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                TextButton(onClick = { expanded = !expanded }) {
-                                    Text(if (expanded) "Ocultar" else "Ver")
-                                }
-                            }
-                            if (expanded) {
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    state.done.forEach { item ->
-                                        ProcedureCard(
-                                            item = item,
-                                            onMove = onMove,
-                                            modifier = Modifier.fillMaxWidth(),
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
                 }
             }
         }
+    }
+}
+
+/** Lista: todos los procedimientos agrupados por estado, ordenados por cama. */
+@Composable
+private fun BoardListView(
+    state: BoardUiState,
+    onMove: (String, BoardColumn) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        boardSection(BoardColumn.PROPOSED, state.proposed.sortedByBed(), onMove)
+        boardSection(BoardColumn.SCHEDULED, state.scheduled.sortedByBed(), onMove)
+        boardSection(BoardColumn.DONE, state.done.sortedByBed(), onMove)
+    }
+}
+
+private fun LazyListScope.boardSection(
+    column: BoardColumn,
+    items: List<BoardItem>,
+    onMove: (String, BoardColumn) -> Unit,
+) {
+    item(key = "header-${column.name}") {
+        Text(
+            "${column.title} (${items.size})",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+    items(items, key = { "card-${it.procedure.id}" }) { item ->
+        ProcedureCard(
+            item = item,
+            onMove = onMove,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -294,11 +414,19 @@ private fun ProcedureCard(
                     }
                 }
                 else -> {
-                    Text(
-                        "✓ Completado",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary,
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "✓ Completado",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary,
+                        )
+                        TextButton(onClick = { onMove(p.id, BoardColumn.SCHEDULED) }) {
+                            Text("← Programado")
+                        }
+                    }
                 }
             }
         }

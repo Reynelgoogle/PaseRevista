@@ -103,6 +103,7 @@ private class CrashCards(private val bedByPatient: Map<String, String>) : CaseCa
     override suspend fun deleteByPatient(patientId: String) {}
     override suspend fun recentDiagnoses(limit: Int): List<String> = emptyList()
     override suspend fun findByJourneyAndBed(journeyId: String, bed: String): com.reynelbusto.paserevista.domain.model.CaseCard? = null
+    override suspend fun findAllByJourneyAndBed(journeyId: String, bed: String): List<com.reynelbusto.paserevista.domain.model.CaseCard> = emptyList()
 }
 
 private class CrashHistory : CaseHistoryRepository {

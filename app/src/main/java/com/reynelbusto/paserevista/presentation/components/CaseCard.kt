@@ -43,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -97,6 +98,13 @@ fun CaseCardView(
     modifier: Modifier = Modifier,
     /** Deep link del widget rápido: arranca expandida. */
     initiallyExpanded: Boolean = false,
+    /**
+     * Modo lectura (Agenda): se ve todo pero sin acciones de mutación
+     * (editar, pendientes, alta, borrado, Marcar Listo). Compartir sigue.
+     */
+    readOnly: Boolean = false,
+    /** Marca de continuidad en la agenda ("viene de ayer" / "nuevo hoy"). */
+    originMark: String? = null,
 ) {
     val card = row.card
     var showPatientData by remember { mutableStateOf(false) }
@@ -142,35 +150,39 @@ fun CaseCardView(
                         Icon(Icons.Filled.MoreVert, contentDescription = "Opciones")
                     }
                     DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                        DropdownMenuItem(
-                            text = { Text("Editar tarjeta") },
-                            onClick = { showMenu = false; showEditFields = true },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Datos del paciente") },
-                            onClick = { showMenu = false; showPatientData = true },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("＋ Apartado") },
-                            onClick = { showMenu = false; showAddField = true },
-                        )
+                        if (!readOnly) {
+                            DropdownMenuItem(
+                                text = { Text("Editar tarjeta") },
+                                onClick = { showMenu = false; showEditFields = true },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Datos del paciente") },
+                                onClick = { showMenu = false; showPatientData = true },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("＋ Apartado") },
+                                onClick = { showMenu = false; showAddField = true },
+                            )
+                        }
                         DropdownMenuItem(
                             text = { Text("Historial") },
                             onClick = { showMenu = false; showHistory = !showHistory },
                         )
-                        DropdownMenuItem(
-                            text = { Text("Dar de alta") },
-                            onClick = { showMenu = false; showDischarge = true },
-                        )
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    "Borrar tarjeta",
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                            },
-                            onClick = { showMenu = false; showDeleteCase = true },
-                        )
+                        if (!readOnly) {
+                            DropdownMenuItem(
+                                text = { Text("Dar de alta") },
+                                onClick = { showMenu = false; showDischarge = true },
+                            )
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        "Borrar tarjeta",
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                },
+                                onClick = { showMenu = false; showDeleteCase = true },
+                            )
+                        }
                     }
                 }
                 if (displayName != "Cama ${card.bed}") {
@@ -188,7 +200,7 @@ fun CaseCardView(
                     label = "Pendientes",
                     value = pendingsSummary(row),
                     highlight = row.openPendings.isNotEmpty(),
-                    onClick = { showPendings = true },
+                    onClick = if (readOnly) null else ({ showPendings = true }),
                 )
                 DetailRow(
                     label = "Grupo sanguíneo",
@@ -203,12 +215,14 @@ fun CaseCardView(
                         Column(Modifier.weight(1f)) {
                             DetailRow(field.label, field.value.ifBlank { "—" })
                         }
-                        IconButton(onClick = { renameField = field }) {
-                            Icon(
-                                Icons.Filled.Edit,
-                                contentDescription = "Renombrar apartado",
-                                tint = TextSecondary,
-                            )
+                        if (!readOnly) {
+                            IconButton(onClick = { renameField = field }) {
+                                Icon(
+                                    Icons.Filled.Edit,
+                                    contentDescription = "Renombrar apartado",
+                                    tint = TextSecondary,
+                                )
+                            }
                         }
                     }
                 }
@@ -239,11 +253,13 @@ fun CaseCardView(
                 Spacer(Modifier.height(10.dp))
                 // Acciones principales.
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(
-                        onClick = onToggleReady,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text(if (card.ready) "Volver a pendiente" else "✓ Marcar Listo")
+                    if (!readOnly) {
+                        Button(
+                            onClick = onToggleReady,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(if (card.ready) "Volver a pendiente" else "✓ Marcar Listo")
+                        }
                     }
                     OutlinedButton(
                         onClick = { showShareChoice = true },
@@ -309,6 +325,15 @@ fun CaseCardView(
                         color = accent,
                     )
                     MarcasRow(row)
+                    if (originMark != null) {
+                        Text(
+                            text = originMark,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontStyle = FontStyle.Italic,
+                            color = TextSecondary,
+                            modifier = Modifier.align(Alignment.End),
+                        )
+                    }
                 }
             }
         }
