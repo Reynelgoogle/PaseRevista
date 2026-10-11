@@ -11,6 +11,7 @@ import com.reynelbusto.paserevista.data.local.DATABASE_NAME
 import com.reynelbusto.paserevista.data.local.DatabaseUnitOfWork
 import com.reynelbusto.paserevista.data.local.MIGRATION_1_2
 import com.reynelbusto.paserevista.data.local.MIGRATION_2_3
+import com.reynelbusto.paserevista.data.local.MIGRATION_3_4
 import com.reynelbusto.paserevista.data.local.PaseRevistaDatabase
 import com.reynelbusto.paserevista.data.local.SCHEMA_VERSION
 import com.reynelbusto.paserevista.data.repository.CaseCardRepositoryImpl
@@ -67,7 +68,7 @@ class AppContainer(context: Context) {
             appContext,
             PaseRevistaDatabase::class.java,
             DATABASE_NAME,
-        ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
+        ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build()
 
     /**
      * Cierra Room para poder reemplazar el archivo .db (restaurar respaldo).

@@ -1,3 +1,4 @@
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -21,12 +22,44 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        val debugKeystore = file("$rootDir/debug.keystore")
+        if (debugKeystore.exists()) {
+            create("debugConfig") {
+                storeFile = debugKeystore
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+
+        val keystorePropertiesFile = rootProject.file("keystore.properties")
+        if (keystorePropertiesFile.exists()) {
+            val keystoreProperties = Properties().apply {
+                load(keystorePropertiesFile.inputStream())
+            }
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile") ?: "release.jks")
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         debug {
+            val debugKeystore = file("$rootDir/debug.keystore")
+            if (debugKeystore.exists()) {
+                signingConfig = signingConfigs.getByName("debugConfig")
+            }
             applicationIdSuffix = ".debug"
             buildConfigField("boolean", "SEED_ENABLED", "true")
         }
         release {
+            val releaseSigningConfig = signingConfigs.findByName("release")
+            val customDebugConfig = signingConfigs.findByName("debugConfig")
+            signingConfig = releaseSigningConfig ?: customDebugConfig ?: signingConfigs.getByName("debug")
             buildConfigField("boolean", "SEED_ENABLED", "false")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

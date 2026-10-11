@@ -360,7 +360,7 @@ private fun BoardColumnView(
 }
 
 @Composable
-private fun ProcedureCard(
+internal fun ProcedureCard(
     item: BoardItem,
     onMove: (String, BoardColumn) -> Unit,
     modifier: Modifier = Modifier,

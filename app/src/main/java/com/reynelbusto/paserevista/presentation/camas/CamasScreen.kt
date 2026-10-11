@@ -154,9 +154,9 @@ fun CamasScreen(
                             initiallyExpanded = row.card.id == initialExpandedCardId,
                             onToggleReady = { vm.toggleReady(row.card.id) },
                             onSaveFields = { patch -> vm.saveFields(row.card.id, patch) },
-                            onSavePatientDetails = { name, hc, group, addr, dx, out, sex ->
+                            onSavePatientDetails = { name, hc, group, allergies, addr, dx, out, sex ->
                                 vm.savePatientDetails(
-                                    row.patient.id, name, hc, group, addr, dx, out, sex,
+                                    row.patient.id, name, hc, group, allergies, addr, dx, out, sex,
                                 )
                             },
                             onAddCustomField = { label, value ->

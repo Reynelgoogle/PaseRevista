@@ -174,7 +174,7 @@ class BackupManager(
     }
 
     /**
-     * Restaura un respaldo de forma ATÓMICA:
+     * Restaura un respaldo de la lista interna de forma ATÓMICA:
      * 1. Copia el respaldo a un temporal (la BD viva no se toca).
      * 2. Valida el temporal (cabecera SQLite, esquema, integridad).
      * 3. Copia de seguridad del .db actual.
@@ -182,49 +182,74 @@ class BackupManager(
      * Si algo falla antes del paso 4, la BD viva queda intacta.
      * La UI debe reiniciar la app después (los repositorios en memoria
      * apuntan a la base anterior).
+     *
+     * NOTA: en Android 10+ la app solo puede LEER los bytes de sus
+     * propios archivos. Los respaldos de OTRA app (p. ej. la variante
+     * debug) se listan pero su lectura directa falla: para esos casos
+     * usar [restoreFromUri] con un archivo elegido por el usuario (SAF),
+     * que sí trae permiso de lectura.
      */
     suspend fun restoreBackup(entry: BackupEntry) = withContext(Dispatchers.IO) {
-        backupMutex.withLock {
-            val dbFile = databaseFile()
-            val parent = dbFile.parentFile
-                ?: error("No se pudo determinar la carpeta de la base de datos")
-            val tmp = File(parent, "${dbFile.name}.restore-tmp")
+        backupMutex.withLock { restoreLocked(entry.uri, entry.fileName) }
+    }
+
+    /**
+     * Restaura desde cualquier Uri legible: un archivo elegido con el
+     * selector del sistema (SAF), un respaldo compartido por Drive, etc.
+     * El Uri elegido por el usuario trae permiso de lectura aunque el
+     * archivo sea de otra app. Misma atomicidad que [restoreBackup].
+     */
+    suspend fun restoreFromUri(uri: Uri, fileName: String) = withContext(Dispatchers.IO) {
+        backupMutex.withLock { restoreLocked(uri, fileName) }
+    }
+
+    private fun restoreLocked(uri: Uri, fileName: String) {
+        val dbFile = databaseFile()
+        val parent = dbFile.parentFile
+            ?: error("No se pudo determinar la carpeta de la base de datos")
+        val tmp = File(parent, "${dbFile.name}.restore-tmp")
+        try {
+            // 1. Copiar a temporal sin tocar la BD viva.
             try {
-                // 1. Copiar a temporal sin tocar la BD viva.
-                appContext.contentResolver.openInputStream(entry.uri)?.use { input ->
+                appContext.contentResolver.openInputStream(uri)?.use { input ->
                     tmp.outputStream().use { out -> input.copyTo(out) }
-                } ?: error("No se pudo leer el respaldo ${entry.fileName}")
-
-                // 2. Validar ANTES de reemplazar nada.
-                val header = readHeader(tmp)
-                val sidecar = readSidecar(entry.fileName)
-                validateRestoreCandidate(header, sidecar, schemaVersion)?.let { error(it) }
-                if (!sqliteIntegrityOk(tmp)) {
-                    error("El respaldo está dañado (falló la verificación de integridad)")
-                }
-
-                // 3. BD viva: checkpoint, cerrar y copia de seguridad.
-                checkpointWithRetry()
-                closeDatabase()
-                val safety = File(parent, "${dbFile.name}.pre-restore-bak")
-                if (dbFile.exists()) dbFile.copyTo(safety, overwrite = true)
-                try {
-                    File(dbFile.path + "-wal").delete()
-                    File(dbFile.path + "-shm").delete()
-                    // 4. Reemplazo atómico (mismo directorio → rename atómico).
-                    Files.move(
-                        tmp.toPath(), dbFile.toPath(),
-                        StandardCopyOption.ATOMIC_MOVE,
-                        StandardCopyOption.REPLACE_EXISTING,
-                    )
-                    safety.delete()
-                } catch (e: Exception) {
-                    // La copia .pre-restore-bak queda para rescate manual.
-                    throw e
-                }
-            } finally {
-                if (tmp.exists()) tmp.delete()
+                } ?: error("No se pudo leer el respaldo $fileName")
+            } catch (e: SecurityException) {
+                error(
+                    "Sin permiso para leer ese archivo (es de otra app). " +
+                        "Use «Restaurar desde archivo…» y elíjalo de nuevo.",
+                )
             }
+
+            // 2. Validar ANTES de reemplazar nada.
+            val header = readHeader(tmp)
+            val sidecar = readSidecar(fileName)
+            validateRestoreCandidate(header, sidecar, schemaVersion)?.let { error(it) }
+            if (!sqliteIntegrityOk(tmp)) {
+                error("El respaldo está dañado (falló la verificación de integridad)")
+            }
+
+            // 3. BD viva: checkpoint, cerrar y copia de seguridad.
+            checkpointWithRetry()
+            closeDatabase()
+            val safety = File(parent, "${dbFile.name}.pre-restore-bak")
+            if (dbFile.exists()) dbFile.copyTo(safety, overwrite = true)
+            try {
+                File(dbFile.path + "-wal").delete()
+                File(dbFile.path + "-shm").delete()
+                // 4. Reemplazo atómico (mismo directorio → rename atómico).
+                Files.move(
+                    tmp.toPath(), dbFile.toPath(),
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING,
+                )
+                safety.delete()
+            } catch (e: Exception) {
+                // La copia .pre-restore-bak queda para rescate manual.
+                throw e
+            }
+        } finally {
+            if (tmp.exists()) tmp.delete()
         }
     }
 

@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.net.Uri
+import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -107,6 +109,33 @@ fun MoreScreen(container: AppContainer) {
         else scope.launch { snackbar.showSnackbar("Sin permiso no se puede crear el respaldo") }
     }
 
+    /**
+     * Restaurar un archivo elegido por el usuario (selector del sistema).
+     * El Uri elegido trae permiso de lectura aunque el archivo sea de
+     * OTRA app: es la vía para migrar datos debug → release (distinto
+     * applicationId = sandbox distinto, la lectura directa entre apps
+     * la bloquea el sistema).
+     */
+    val openDocumentLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        working = true
+        scope.launch {
+            try {
+                backupManager.restoreFromUri(uri, displayNameOf(context, uri))
+                restartApp(context)
+            } catch (e: Exception) {
+                statusMessage = null
+                snackbar.showSnackbar(
+                    "No se pudo restaurar: ${e.message ?: "error desconocido"}",
+                )
+            } finally {
+                working = false
+            }
+        }
+    }
+
     fun createBackup() {
         if (Build.VERSION.SDK_INT < 29 &&
             ContextCompat.checkSelfPermission(
@@ -162,6 +191,21 @@ fun MoreScreen(container: AppContainer) {
                 Spacer(Modifier.height(8.dp))
                 Text(it, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
             }
+
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { openDocumentLauncher.launch(arrayOf("*/*")) },
+                enabled = !working,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Restaurar desde archivo…")
+            }
+            Text(
+                text = "Para traer datos de la versión debug u otro archivo: " +
+                    "elija el .db de Documents/EntregaGuardia/ en el selector.",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary,
+            )
 
             Spacer(Modifier.height(8.dp))
             Row(
@@ -299,6 +343,22 @@ private fun BackupRow(
             }
         }
     }
+}
+
+/**
+ * Nombre visible del Uri elegido (para mensajes y búsqueda del sidecar).
+ * Si el proveedor no lo informa, se usa el último segmento del Uri.
+ */
+private fun displayNameOf(context: Context, uri: Uri): String {
+    context.contentResolver.query(
+        uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null,
+    )?.use { c ->
+        if (c.moveToFirst()) {
+            c.getString(0)?.takeIf { it.isNotBlank() }?.let { return it }
+        }
+    }
+    return uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
+        ?: "respaldo.db"
 }
 
 /**

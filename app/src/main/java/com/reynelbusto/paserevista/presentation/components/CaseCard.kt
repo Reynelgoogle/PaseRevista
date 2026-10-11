@@ -83,7 +83,7 @@ fun CaseCardView(
     onSaveFields: (CaseCardPatch) -> Unit,
     onSavePatientDetails: (
         fullName: String?, hcNumber: String?, bloodGroup: String?,
-        address: String?, mainDiagnosis: String?, isOutOfService: Boolean?,
+        allergies: String?, address: String?, mainDiagnosis: String?, isOutOfService: Boolean?,
         sex: Sex?,
     ) -> Unit,
     onAddCustomField: (label: String, value: String) -> Unit,
@@ -203,9 +203,9 @@ fun CaseCardView(
                     onClick = if (readOnly) null else ({ showPendings = true }),
                 )
                 DetailRow(
-                    label = "Grupo sanguíneo",
-                    value = row.patient.bloodGroup,
-                    highlight = !row.patient.bloodGroup.isNullOrBlank(),
+                    label = "Alergias",
+                    value = row.patient.allergies,
+                    highlight = !row.patient.allergies.isNullOrBlank(),
                 )
                 DetailRow("Estado actual", card.currentState)
                 DetailRow("Antibiótico", card.antibiotic)
@@ -350,10 +350,10 @@ fun CaseCardView(
         PatientDataDialog(
             patient = row.patient,
             onDismiss = { showPatientData = false },
-            onConfirm = { name, hc, group, addr, dx, out, sex ->
-                showPatientData = false
-                onSavePatientDetails(name, hc, group, addr, dx, out, sex)
-            },
+        onConfirm = { name, hc, group, allergies, addr, dx, out, sex ->
+            showPatientData = false
+            onSavePatientDetails(name, hc, group, allergies, addr, dx, out, sex)
+        },
         )
     }
     if (showAddField) {
@@ -653,13 +653,14 @@ fun PatientDataDialog(
     onDismiss: () -> Unit,
     onConfirm: (
         fullName: String?, hcNumber: String?, bloodGroup: String?,
-        address: String?, mainDiagnosis: String?, isOutOfService: Boolean?,
+        allergies: String?, address: String?, mainDiagnosis: String?, isOutOfService: Boolean?,
         sex: Sex?,
     ) -> Unit,
 ) {
     var name by remember { mutableStateOf(patient.fullName ?: "") }
     var hc by remember { mutableStateOf(patient.hcNumber ?: "") }
     var group by remember { mutableStateOf(patient.bloodGroup) }
+    var allergies by remember { mutableStateOf(patient.allergies ?: "") }
     var address by remember { mutableStateOf(patient.address ?: "") }
     var dx by remember { mutableStateOf(patient.mainDiagnosis ?: "") }
     var outOfService by remember { mutableStateOf(patient.isOutOfService) }
@@ -691,6 +692,11 @@ fun PatientDataDialog(
                     onValueChange = { group = it },
                     allowOther = false,
                 )
+                OutlinedTextField(
+                    value = allergies, onValueChange = { allergies = it },
+                    label = { Text("Alergias (opcional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 SexSegmentedButton(selected = sex, onSelect = { sex = it })
                 OutlinedTextField(
                     value = address, onValueChange = { address = it },
@@ -713,7 +719,7 @@ fun PatientDataDialog(
         confirmButton = {
             Button(onClick = {
                 onConfirm(
-                    name.ifBlank { null }, hc.ifBlank { null }, group,
+                    name.ifBlank { null }, hc.ifBlank { null }, group, allergies.ifBlank { null },
                     address.ifBlank { null }, dx.ifBlank { null }, outOfService, sex,
                 )
             }) { Text("Guardar") }

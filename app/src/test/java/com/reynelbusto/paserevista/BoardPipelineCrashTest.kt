@@ -64,6 +64,7 @@ private open class CrashProcedures(val flow: MutableStateFlow<List<Procedure>>) 
     override fun observeRecentPerformed(limit: Int): Flow<List<Procedure>> = MutableStateFlow(emptyList())
     override suspend fun getProcedure(id: String): Procedure? = null
     override suspend fun findActiveByPatient(patientId: String): Procedure? = null
+    override suspend fun findPerformedByPatientInJourney(patientId: String, journeyId: String): Procedure? = null
     override suspend fun create(procedure: Procedure): String = procedure.id
     override suspend fun update(procedure: Procedure) {}
     override suspend fun deleteByPatient(patientId: String) {}

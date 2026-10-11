@@ -16,16 +16,23 @@ build/
 *.iws
 local.properties
 
+# Salida de APK/AAB generados (no subir binarios)
+app/release/
+
 # Keystore y firmas (JAMÁS subir)
 *.jks
 *.keystore
 *.p12
+keystore.properties
 
 # Datos clínicos / bases de datos locales
 *.db
 *.db-shm
 *.db-wal
 schemas/
+
+# Volcados de memoria de la JVM (Gradle): se generan al quedarse sin memoria
+*.hprof
 
 # Sistema
 .DS_Store

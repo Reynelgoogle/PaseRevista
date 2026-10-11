@@ -1,6 +1,8 @@
 package com.reynelbusto.paserevista.domain.model
 
 import com.reynelbusto.paserevista.core.IsoDate
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 
 /**
  * Modelos de dominio. Separados de las entidades Room a propósito:
@@ -17,6 +19,8 @@ data class Patient(
     val sex: Sex?,
     val hcNumber: String?,
     val bloodGroup: String? = null,
+    /** Alergias conocidas: dato de seguridad clínica, se destaca en la tarjeta. */
+    val allergies: String? = null,
     val address: String? = null,
     val serviceId: String,
     val admissionDate: IsoDate,
@@ -83,6 +87,14 @@ enum class BoardColumn(val title: String, val state: ProcedureState) {
 /** Nombre visible del paciente: nombre si se conoce, si no "Cama N". */
 fun Patient.displayName(bed: String?): String =
     fullName?.takeIf { it.isNotBlank() } ?: "Cama ${bed ?: "—"}"
+
+/**
+ * Días de estancia (enteros) desde el ingreso hasta [todayIso].
+ * null si alguna fecha no es válida (nunca revienta por un dato raro).
+ */
+fun Patient.stayDays(todayIso: IsoDate): Long? = runCatching {
+    ChronoUnit.DAYS.between(LocalDate.parse(admissionDate), LocalDate.parse(todayIso))
+}.getOrNull()
 
 /** Descripción visible del pendiente: la cargada, o aviso si va vacía. */
 fun Pending.displayDescription(): String =
