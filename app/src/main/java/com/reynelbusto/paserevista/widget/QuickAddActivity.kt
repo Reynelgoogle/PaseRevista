@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import com.reynelbusto.paserevista.PaseRevistaApp
+import com.reynelbusto.paserevista.domain.model.PatientState
 import com.reynelbusto.paserevista.domain.usecase.CaseCardPatch
 import com.reynelbusto.paserevista.domain.usecase.DEFAULT_SERVICE_ID
 import com.reynelbusto.paserevista.presentation.theme.PaseRevistaTheme
@@ -88,8 +89,15 @@ class QuickAddActivity : ComponentActivity() {
             try {
                 val c = (application as PaseRevistaApp).container
                 val journeyId = c.ensureDay(DEFAULT_SERVICE_ID)
+                // Solo cuentan como ocupadas las camas de pacientes activos: una
+                // cama liberada por un alta vuelve a estar disponible.
                 val usedBeds = c.caseCardRepository
-                    .observeByJourney(journeyId).first().map { it.bed }
+                    .observeByJourney(journeyId).first()
+                    .filter { card ->
+                        c.patientRepository.getPatient(card.patientId)?.status ==
+                            PatientState.ACTIVE
+                    }
+                    .map { it.bed }
                 val finalBed = bed.trim().ifEmpty { nextFreeBed(usedBeds) }
                 // M3 vive en AddBedUseCase: si la cama ya existe hoy, lanza
                 // IllegalStateException y se muestra el mensaje.

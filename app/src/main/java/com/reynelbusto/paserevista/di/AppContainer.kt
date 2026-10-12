@@ -10,6 +10,7 @@ import com.reynelbusto.paserevista.data.backup.WalCheckpointResult
 import com.reynelbusto.paserevista.data.local.DATABASE_NAME
 import com.reynelbusto.paserevista.data.local.DatabaseUnitOfWork
 import com.reynelbusto.paserevista.data.local.MIGRATION_1_2
+import com.reynelbusto.paserevista.data.local.MIGRATION_2_3
 import com.reynelbusto.paserevista.data.local.PaseRevistaDatabase
 import com.reynelbusto.paserevista.data.local.SCHEMA_VERSION
 import com.reynelbusto.paserevista.data.repository.CaseCardRepositoryImpl

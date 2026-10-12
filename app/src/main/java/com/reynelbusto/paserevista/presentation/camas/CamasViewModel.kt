@@ -21,7 +21,7 @@ import com.reynelbusto.paserevista.domain.usecase.DEFAULT_SERVICE_ID
 import com.reynelbusto.paserevista.domain.usecase.DischargeUseCase
 import com.reynelbusto.paserevista.domain.usecase.ShareFormatter
 import com.reynelbusto.paserevista.presentation.components.PendingFormData
-import com.reynelbusto.paserevista.widget.CaseWidgetProvider
+import com.reynelbusto.paserevista.widget.WidgetRefresh
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -132,7 +132,7 @@ class CamasViewModel(
                     error = pendingError,
                     dischargeConfirm = pendingConfirm,
                 )
-                CaseWidgetProvider.requestUpdate(appContext)
+                WidgetRefresh.refreshAll(appContext)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,

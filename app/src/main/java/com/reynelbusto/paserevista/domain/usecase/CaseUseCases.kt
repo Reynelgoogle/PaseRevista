@@ -64,10 +64,15 @@ class AddBedUseCase(
             val journey = journeys.getOrCreateJourney(
                 serviceId, clock.todayIso(), JourneyOrigin.AUTO.code,
             )
-            // M3: no duplicar camas en la misma jornada.
+            // M3: no duplicar camas OCUPADAS en la misma jornada. Si la tarjeta
+            // que hay es de un paciente ya dado de alta, la cama queda libre
+            // para ingresar otro paciente ese mismo día.
             val bedNumber = bed.trim()
-            check(cards.findByJourneyAndBed(journey.id, bedNumber) == null) {
-                "La cama $bedNumber ya existe hoy"
+            val occupied = cards.findAllByJourneyAndBed(journey.id, bedNumber).any { card ->
+                patients.getPatient(card.patientId)?.status == PatientState.ACTIVE
+            }
+            check(!occupied) {
+                "La cama $bedNumber ya está ocupada hoy"
             }
             val card = CaseCard(
                 id = newId(),
