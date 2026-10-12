@@ -61,6 +61,36 @@ fun dayTitle(iso: IsoDate): String {
     return "${d.dayOfMonth} de $month"
 }
 
+/**
+ * Los 7 días (lunes..domingo) de la semana que contiene [date].
+ * Base de la vista semanal del calendario.
+ */
+fun weekOf(date: LocalDate): List<LocalDate> {
+    val monday = date.minusDays((date.dayOfWeek.value - 1).toLong())
+    return (0 until 7).map { monday.plusDays(it.toLong()) }
+}
+
+/** "5 – 11 de octubre"; si cruza de mes: "29 de sep – 5 de oct". */
+fun weekTitle(days: List<LocalDate>): String {
+    require(days.size == 7) { "weekTitle espera 7 días" }
+    val first = days.first()
+    val last = days.last()
+    val lastFull = last.month.getDisplayName(TextStyle.FULL, ES)
+    return if (first.month == last.month) {
+        "${first.dayOfMonth} – ${last.dayOfMonth} de $lastFull"
+    } else {
+        val firstShort = first.month.getDisplayName(TextStyle.SHORT, ES)
+        val lastShort = last.month.getDisplayName(TextStyle.SHORT, ES)
+        "${first.dayOfMonth} de $firstShort – ${last.dayOfMonth} de $lastShort"
+    }
+}
+
+/**
+ * Etiqueta del indicador bajo el día: "" = solo punto (1 procedimiento),
+ * "N" = conteo (varios). Vacío si no hay nada.
+ */
+fun dayCountLabel(count: Int): String = if (count > 1) count.toString() else ""
+
 /** Procedimientos agrupados por fecha programada, más los sin fecha. */
 data class DateGroups(
     val byDate: Map<IsoDate, List<BoardItem>>,

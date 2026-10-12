@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.reynelbusto.paserevista.di.AppContainer
+import com.reynelbusto.paserevista.core.IsoDate
 import com.reynelbusto.paserevista.domain.model.BoardColumn
 import com.reynelbusto.paserevista.domain.usecase.BoardItem
 import com.reynelbusto.paserevista.domain.usecase.BoardUseCase
@@ -95,6 +96,17 @@ class BoardViewModel(private val board: BoardUseCase) : ViewModel() {
         viewModelScope.launch {
             try {
                 board.moveTo(procedureId, column)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(error = e.message ?: "Error inesperado")
+            }
+        }
+    }
+
+    /** Cambia la fecha programada (desde el calendario). El flujo refresca solo. */
+    fun reschedule(procedureId: String, date: IsoDate) {
+        viewModelScope.launch {
+            try {
+                board.reschedule(procedureId, date)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(error = e.message ?: "Error inesperado")
             }

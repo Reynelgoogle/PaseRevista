@@ -4,11 +4,14 @@ import com.reynelbusto.paserevista.domain.model.ClinicalPriority
 import com.reynelbusto.paserevista.domain.model.Procedure
 import com.reynelbusto.paserevista.domain.model.ProcedureState
 import com.reynelbusto.paserevista.domain.usecase.BoardItem
+import com.reynelbusto.paserevista.presentation.board.dayCountLabel
 import com.reynelbusto.paserevista.presentation.board.dayTitle
 import com.reynelbusto.paserevista.presentation.board.groupByDate
 import com.reynelbusto.paserevista.presentation.board.monthGrid
 import com.reynelbusto.paserevista.presentation.board.monthTitle
 import com.reynelbusto.paserevista.presentation.board.sortedByBed
+import com.reynelbusto.paserevista.presentation.board.weekOf
+import com.reynelbusto.paserevista.presentation.board.weekTitle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -119,5 +122,45 @@ class BoardCalendarTest {
             listOf("e", "b", "a", "c", "d"),
             items.sortedByBed().map { it.procedure.id },
         )
+    }
+
+    @Test
+    fun `weekOf devuelve lunes a domingo de la semana`() {
+        // 2026-10-11 es domingo → la semana va del lunes 5 al domingo 11.
+        val days = weekOf(LocalDate.of(2026, 10, 11))
+        assertEquals(7, days.size)
+        assertEquals(LocalDate.of(2026, 10, 5), days.first())
+        assertEquals(LocalDate.of(2026, 10, 11), days.last())
+        assertTrue(days.all { it.dayOfWeek == DayOfWeek.of(days.indexOf(it) + 1) })
+    }
+
+    @Test
+    fun `weekOf un lunes devuelve su propia semana`() {
+        val days = weekOf(LocalDate.of(2026, 10, 5))
+        assertEquals(LocalDate.of(2026, 10, 5), days.first())
+        assertEquals(LocalDate.of(2026, 10, 11), days.last())
+    }
+
+    @Test
+    fun `weekTitle mismo mes`() {
+        val days = weekOf(LocalDate.of(2026, 10, 7))
+        assertEquals("5 – 11 de octubre", weekTitle(days))
+    }
+
+    @Test
+    fun `weekTitle cruzando meses`() {
+        // Semana del 28 de sep al 4 de oct.
+        val days = weekOf(LocalDate.of(2026, 10, 1))
+        val title = weekTitle(days)
+        assertTrue("esperaba '28' en '$title'", title.contains("28"))
+        assertTrue("esperaba '4' en '$title'", title.contains("4"))
+    }
+
+    @Test
+    fun `dayCountLabel punto o conteo`() {
+        assertEquals("", dayCountLabel(0))
+        assertEquals("", dayCountLabel(1))
+        assertEquals("2", dayCountLabel(2))
+        assertEquals("12", dayCountLabel(12))
     }
 }

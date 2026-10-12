@@ -1,6 +1,7 @@
 package com.reynelbusto.paserevista.domain.usecase
 
 import com.reynelbusto.paserevista.core.Clock
+import com.reynelbusto.paserevista.core.IsoDate
 import com.reynelbusto.paserevista.core.newId
 import com.reynelbusto.paserevista.domain.model.BoardColumn
 import com.reynelbusto.paserevista.domain.model.CaseCard
@@ -420,6 +421,25 @@ class BoardUseCase(
         history.log(
             procedure.patientId, null,
             "En pizarra: ${procedure.kind} → ${column.title}",
+        )
+    }
+
+    /**
+     * Cambia la fecha programada de un procedimiento (desde el calendario de
+     * la pizarra). `date` null/vacía = quitar la fecha (vuelve a "Sin fecha").
+     */
+    suspend fun reschedule(procedureId: String, date: IsoDate?) = unitOfWork.atomic {
+        val procedure = procedures.getProcedure(procedureId) ?: error("Procedimiento no encontrado")
+        val clean = date?.ifBlank { null }
+        procedures.update(
+            procedure.copy(
+                scheduledDate = clean,
+                updatedAt = clock.nowMillis(),
+            ),
+        )
+        history.log(
+            procedure.patientId, procedure.journeyId,
+            "Fecha programada → ${clean ?: "sin fecha"}",
         )
     }
 }

@@ -1,19 +1,26 @@
 package com.reynelbusto.paserevista.presentation.board
 
+import androidx.compose.foundation.background
+import com.reynelbusto.paserevista.core.IsoDate
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -40,14 +47,20 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import com.reynelbusto.paserevista.di.AppContainer
 import com.reynelbusto.paserevista.domain.model.BoardColumn
+import com.reynelbusto.paserevista.domain.model.ProcedureState
 import com.reynelbusto.paserevista.domain.usecase.BoardItem
 import com.reynelbusto.paserevista.presentation.components.EmptyState
+import com.reynelbusto.paserevista.presentation.theme.ClinicalStable
+import com.reynelbusto.paserevista.presentation.theme.ClinicalWatch
+import com.reynelbusto.paserevista.presentation.theme.PaseRevistaPrimary
 import com.reynelbusto.paserevista.presentation.theme.TextSecondary
 
 /**
@@ -94,6 +107,7 @@ fun BoardScreen(container: AppContainer) {
             else -> BoardContent(
                 state = state,
                 onMove = vm::moveTo,
+                onReschedule = vm::reschedule,
                 modifier = Modifier.padding(padding),
             )
         }
@@ -111,6 +125,7 @@ private enum class BoardView(val title: String) {
 private fun BoardContent(
     state: BoardUiState,
     onMove: (String, BoardColumn) -> Unit,
+    onReschedule: (String, IsoDate) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val total = state.proposed.size + state.scheduled.size + state.done.size
@@ -156,6 +171,7 @@ private fun BoardContent(
             BoardView.CALENDAR -> BoardCalendarView(
                 state = state,
                 onMove = onMove,
+                onReschedule = onReschedule,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -374,61 +390,87 @@ internal fun ProcedureCard(
             else MaterialTheme.colorScheme.surface,
         ),
     ) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (item.bed != null) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min)
+                .clip(RoundedCornerShape(12.dp)),
+        ) {
+            // Cinta de estado: el color identifica la columna de un vistazo.
+            Box(
+                modifier = Modifier
+                    .width(10.dp)
+                    .fillMaxHeight()
+                    .background(boardStripeColor(p.status)),
+            )
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (item.bed != null) {
+                    Text(
+                        "CAMA ${item.bed}",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
                 Text(
-                    "CAMA ${item.bed}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
+                    p.kind,
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
-            }
-            Text(
-                p.kind,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                item.displayName,
-                style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary,
-            )
-            p.scheduledTime?.let {
-                Text(it, style = MaterialTheme.typography.labelMedium, color = TextSecondary)
-            }
-            Spacer(Modifier.height(2.dp))
-            when (p.status) {
-                BoardColumn.PROPOSED.state -> {
-                    Button(onClick = { onMove(p.id, BoardColumn.SCHEDULED) }) {
-                        Text("Programar →")
-                    }
+                Text(
+                    item.displayName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary,
+                )
+                p.scheduledTime?.let {
+                    Text(it, style = MaterialTheme.typography.labelMedium, color = TextSecondary)
                 }
-                BoardColumn.SCHEDULED.state -> {
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Button(onClick = { onMove(p.id, BoardColumn.DONE) }) {
-                            Text("Realizado ✓")
-                        }
-                        TextButton(onClick = { onMove(p.id, BoardColumn.PROPOSED) }) {
-                            Text("← Propuesto")
+                Spacer(Modifier.height(2.dp))
+                when (p.status) {
+                    BoardColumn.PROPOSED.state -> {
+                        Button(onClick = { onMove(p.id, BoardColumn.SCHEDULED) }) {
+                            Text("Programar →")
                         }
                     }
-                }
-                else -> {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            "✓ Completado",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary,
-                        )
-                        TextButton(onClick = { onMove(p.id, BoardColumn.SCHEDULED) }) {
-                            Text("← Programado")
+                    BoardColumn.SCHEDULED.state -> {
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Button(onClick = { onMove(p.id, BoardColumn.DONE) }) {
+                                Text("Realizado ✓")
+                            }
+                            TextButton(onClick = { onMove(p.id, BoardColumn.PROPOSED) }) {
+                                Text("← Propuesto")
+                            }
+                        }
+                    }
+                    else -> {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "✓ Completado",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary,
+                            )
+                            TextButton(onClick = { onMove(p.id, BoardColumn.SCHEDULED) }) {
+                                Text("← Programado")
+                            }
                         }
                     }
                 }
             }
         }
     }
+}
+
+/** Color de la cinta lateral según la columna (paleta del sistema de diseño). */
+private fun boardStripeColor(status: ProcedureState): Color = when (status) {
+    BoardColumn.PROPOSED.state -> ClinicalWatch
+    BoardColumn.SCHEDULED.state -> PaseRevistaPrimary
+    else -> ClinicalStable
 }

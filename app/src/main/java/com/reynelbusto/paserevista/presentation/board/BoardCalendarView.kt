@@ -16,14 +16,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -47,28 +52,31 @@ import java.time.format.DateTimeFormatter
 private val ISO: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
 
 /**
- * Vista Calendario de la pizarra: rejilla mensual (semana desde lunes) con
- * los procedimientos agrupados por fecha programada. Los botones de mover
- * de cada tarjeta funcionan igual que en el resto de vistas.
+ * Vista Calendario de la pizarra: ya no es un póster. Rejilla mensual o
+ * semanal (lunes primero), con puntos/conteos por día. Tocar un día abre
+ * su detalle en una hoja inferior; los "Sin fecha programada" se programan
+ * tocando el día destino. Sin drag&drop por decisión explícita.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BoardCalendarView(
     state: BoardUiState,
     onMove: (String, BoardColumn) -> Unit,
+    onReschedule: (String, IsoDate) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val all = remember(state) { state.proposed + state.scheduled + state.done }
     val groups = remember(all) { groupByDate(all) }
     val today = remember { LocalDate.now() }
+    val todayIso: IsoDate = remember(today) { today.format(ISO) }
 
+    var weekMode by rememberSaveable { mutableStateOf(false) }
     var year by rememberSaveable { mutableIntStateOf(today.year) }
     var month by rememberSaveable { mutableIntStateOf(today.monthValue) }
-    var selectedIso by rememberSaveable { mutableStateOf<String?>(null) }
-    val selectedDate = selectedIso
-        ?.let { runCatching { LocalDate.parse(it, ISO) }.getOrNull() }
-        ?: today
-    val selectedKey: IsoDate = selectedDate.format(ISO)
-    val dayItems = groups.byDate[selectedKey].orEmpty().sortedByBed()
+    var weekAnchorIso by rememberSaveable { mutableStateOf(todayIso) }
+    var selectedIso by rememberSaveable { mutableStateOf(todayIso) }
+    var sheetIso by rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedKey: IsoDate = selectedIso
 
     fun shiftMonth(delta: Int) {
         val shifted = LocalDate.of(year, month, 1).plusMonths(delta.toLong())
@@ -76,7 +84,27 @@ fun BoardCalendarView(
         month = shifted.monthValue
     }
 
-    val cells = remember(year, month) { monthGrid(year, month) }
+    fun shiftWeek(delta: Int) {
+        weekAnchorIso = LocalDate.parse(weekAnchorIso, ISO)
+            .plusWeeks(delta.toLong()).format(ISO)
+    }
+
+    fun goToday() {
+        year = today.year
+        month = today.monthValue
+        weekAnchorIso = todayIso
+        selectedIso = todayIso
+    }
+
+    fun selectDay(key: IsoDate) {
+        selectedIso = key
+        sheetIso = key
+    }
+
+    val weekDays = remember(weekAnchorIso) {
+        weekOf(LocalDate.parse(weekAnchorIso, ISO))
+    }
+    val monthCells = remember(year, month) { monthGrid(year, month) }
 
     LazyColumn(
         modifier = modifier
@@ -84,29 +112,57 @@ fun BoardCalendarView(
             .padding(horizontal = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        // Cabecera del mes: ← Octubre 2026 →
+        // Cabecera: ← título →
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                IconButton(onClick = { shiftMonth(-1) }) {
+                IconButton(onClick = { if (weekMode) shiftWeek(-1) else shiftMonth(-1) }) {
                     Icon(
                         Icons.Filled.KeyboardArrowLeft,
-                        contentDescription = "Mes anterior",
+                        contentDescription = "Anterior",
                     )
                 }
                 Text(
-                    monthTitle(year, month),
+                    if (weekMode) weekTitle(weekDays) else monthTitle(year, month),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
-                IconButton(onClick = { shiftMonth(1) }) {
+                IconButton(onClick = { if (weekMode) shiftWeek(1) else shiftMonth(1) }) {
                     Icon(
                         Icons.Filled.KeyboardArrowRight,
-                        contentDescription = "Mes siguiente",
+                        contentDescription = "Siguiente",
                     )
+                }
+            }
+        }
+        // Mes | Semana + Hoy
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = { weekMode = false }) {
+                    Text(
+                        "Mes",
+                        fontWeight = if (!weekMode) FontWeight.Bold else FontWeight.Normal,
+                        color = if (!weekMode) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(onClick = { weekMode = true }) {
+                    Text(
+                        "Semana",
+                        fontWeight = if (weekMode) FontWeight.Bold else FontWeight.Normal,
+                        color = if (weekMode) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = { goToday() }) {
+                    Text("Hoy")
                 }
             }
         }
@@ -125,50 +181,39 @@ fun BoardCalendarView(
                 }
             }
         }
-        // Rejilla 6×7
-        items(cells.chunked(7)) { week ->
-            Row(Modifier.fillMaxWidth()) {
-                week.forEach { day ->
-                    val key = day.date.format(ISO)
-                    CalendarCell(
-                        day = day,
-                        count = groups.byDate[key]?.size ?: 0,
-                        isToday = day.date == today,
-                        isSelected = key == selectedKey,
-                        onSelect = { selectedIso = key },
-                    )
+        // Rejilla: 6×7 en mes, 7 días en semana
+        if (weekMode) {
+            item {
+                Row(Modifier.fillMaxWidth()) {
+                    weekDays.forEach { date ->
+                        val key = date.format(ISO)
+                        CalendarCell(
+                            day = CalendarDay(date = date, inMonth = true),
+                            count = groups.byDate[key]?.size ?: 0,
+                            isToday = date == today,
+                            isSelected = key == selectedKey,
+                            onSelect = { selectDay(key) },
+                        )
+                    }
+                }
+            }
+        } else {
+            items(monthCells.chunked(7)) { week ->
+                Row(Modifier.fillMaxWidth()) {
+                    week.forEach { day ->
+                        val key = day.date.format(ISO)
+                        CalendarCell(
+                            day = day,
+                            count = groups.byDate[key]?.size ?: 0,
+                            isToday = day.date == today,
+                            isSelected = key == selectedKey,
+                            onSelect = { selectDay(key) },
+                        )
+                    }
                 }
             }
         }
-        // Procedimientos del día seleccionado
-        item {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                dayTitle(selectedKey),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
-        if (dayItems.isEmpty()) {
-            item {
-                Text(
-                    "Sin procedimientos este día.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(vertical = 4.dp),
-                )
-            }
-        } else {
-            items(dayItems, key = { it.procedure.id }) { item ->
-                ProcedureCard(
-                    item = item,
-                    onMove = onMove,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        }
-        // Sin fecha programada
+        // Sin fecha programada: cada tarjeta se programa tocando el día destino
         if (groups.undated.isNotEmpty()) {
             item {
                 Spacer(Modifier.height(8.dp))
@@ -178,16 +223,67 @@ fun BoardCalendarView(
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary,
                 )
+                Text(
+                    "Toca un día del calendario para programar.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
             items(groups.undated.sortedByBed(), key = { it.procedure.id }) { item ->
-                ProcedureCard(
-                    item = item,
-                    onMove = onMove,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                Column {
+                    ProcedureCard(
+                        item = item,
+                        onMove = onMove,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    TextButton(
+                        onClick = { onReschedule(item.procedure.id, selectedKey) },
+                        modifier = Modifier.align(Alignment.End),
+                    ) {
+                        Text("Programar el ${dayTitle(selectedKey)}")
+                    }
+                }
             }
         }
         item { Spacer(Modifier.height(12.dp)) }
+    }
+
+    // Detalle del día: hoja inferior con las tarjetas (botones intactos)
+    val sheetKey = sheetIso
+    if (sheetKey != null) {
+        val dayItems = groups.byDate[sheetKey].orEmpty().sortedByBed()
+        ModalBottomSheet(onDismissRequest = { sheetIso = null }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    dayTitle(sheetKey),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                if (dayItems.isEmpty()) {
+                    Text(
+                        "Sin procedimientos este día.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    dayItems.forEach { item ->
+                        ProcedureCard(
+                            item = item,
+                            onMove = onMove,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -220,14 +316,24 @@ private fun RowScope.CalendarCell(
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal,
             )
+            val label = dayCountLabel(count)
             if (count > 0) {
-                Box(
-                    modifier = Modifier
-                        .padding(top = 2.dp)
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary),
-                )
+                if (label.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 2.dp)
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary),
+                    )
+                } else {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
             } else {
                 Spacer(Modifier.size(8.dp))
             }
