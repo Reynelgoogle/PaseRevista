@@ -50,6 +50,9 @@ import com.reynelbusto.paserevista.data.backup.BackupManager
 import com.reynelbusto.paserevista.data.backup.BackupPolicy
 import com.reynelbusto.paserevista.di.AppContainer
 import com.reynelbusto.paserevista.presentation.theme.TextSecondary
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.launch
@@ -318,10 +321,15 @@ private fun BackupRow(
     onShare: () -> Unit,
     onRestore: () -> Unit,
 ) {
-    val dateLabel = remember(entry.fileName) {
-        BackupPolicy.parseBackupDate(entry.fileName)?.format(
+    val dateLabel = remember(entry.fileName, entry.dateMillis) {
+        val fecha = LocalDateTime.ofInstant(
+            Instant.ofEpochMilli(entry.dateMillis),
+            ZoneId.systemDefault(),
+        ).format(
             DateTimeFormatter.ofPattern("d 'de' MMMM yyyy · HH:mm", Locale("es")),
-        )?.replaceFirstChar { it.uppercase() } ?: entry.fileName
+        ).replaceFirstChar { it.uppercase() }
+        // El automático no tiene fecha en el nombre: se marca como tal.
+        if (entry.isAutomatic) "Automático · $fecha" else fecha
     }
     Card(
         modifier = Modifier.fillMaxWidth(),

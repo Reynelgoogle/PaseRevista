@@ -98,7 +98,9 @@ fun validateRestoreCandidate(
  * - Android 10+ (API 29+): MediaStore, sin permisos extra.
  * - API 26-28: carpeta pública Documents/ + WRITE_EXTERNAL_STORAGE (maxSdkVersion 28).
  * - Cada respaldo lleva un sidecar `.json` con fecha, esquema y conteos.
- * - Retención: se conservan los últimos [BackupPolicy.KEEP_COUNT].
+ * - Retención: se conservan los últimos [BackupPolicy.KEEP_COUNT] MANUALES.
+ * - El respaldo automático vive en un único archivo que se sobrescribe
+ *   ([BackupPolicy.AUTO_BACKUP_FILE_NAME]); nunca entra en la retención.
  *
  * Restaurar es ATÓMICO: el respaldo se copia y valida en un temporal y solo
  * entonces reemplaza al .db vivo con un rename atómico; además se conserva
@@ -122,6 +124,8 @@ class BackupManager(
         val dateMillis: Long,
         val sizeBytes: Long,
         val uri: Uri,
+        /** true si es el archivo único del respaldo automático. */
+        val isAutomatic: Boolean = false,
     )
 
     /** Serializa exportar/restaurar entre sí (nunca en paralelo). */
@@ -136,8 +140,9 @@ class BackupManager(
         set(value) = prefs.edit().putBoolean(KEY_AUTO_ENABLED, value).apply()
 
     /**
-     * Crea un respaldo ahora: checkpoint del WAL (verificado) + copia del .db
-     * + sidecar. Devuelve la entrada creada. Lanza excepción si algo falla.
+     * Crea un respaldo MANUAL ahora: checkpoint del WAL (verificado) + copia
+     * del .db + sidecar, con nombre con fecha. Devuelve la entrada creada.
+     * Lanza excepción si algo falla.
      */
     suspend fun exportBackup(): BackupEntry = withContext(Dispatchers.IO) {
         backupMutex.withLock {
@@ -165,6 +170,42 @@ class BackupManager(
 
             val dateMillis = now.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
             BackupEntry(fileName, dateMillis, dbFile.length(), uri)
+        }
+    }
+
+    /**
+     * Respaldo AUTOMÁTICO: escribe siempre en
+     * [BackupPolicy.AUTO_BACKUP_FILE_NAME], sobrescribiendo el anterior.
+     * Nunca se acumula y nunca participa en (ni dispara) la retención.
+     */
+    suspend fun exportAutomaticBackup(): BackupEntry = withContext(Dispatchers.IO) {
+        backupMutex.withLock {
+            checkpointWithRetry()
+            val dbFile = databaseFile()
+            require(dbFile.exists()) { "No hay base de datos que respaldar" }
+
+            val now = LocalDateTime.ofInstant(
+                Instant.ofEpochMilli(clock.nowMillis()), ZoneId.systemDefault(),
+            )
+            val fileName = BackupPolicy.AUTO_BACKUP_FILE_NAME
+            val sidecarJson = BackupPolicy.buildSidecarJson(
+                fecha = now.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+                schemaVersion = schemaVersion,
+                tarjetas = countCards(),
+                camas = countBeds(),
+                appVersion = appVersion,
+            )
+
+            // Sobrescritura real: en MediaStore un insert con el mismo nombre
+            // crearía "respaldo-automatico (1).db"; se borra primero el anterior.
+            deleteByFileName(fileName)
+            val uri = writeBackupFile(fileName, dbFile)
+            writeSidecarFile(BackupPolicy.sidecarFileName(fileName), sidecarJson)
+
+            prefs.edit().putLong(KEY_LAST_BACKUP, clock.nowMillis()).apply()
+
+            val dateMillis = now.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            BackupEntry(fileName, dateMillis, dbFile.length(), uri, isAutomatic = true)
         }
     }
 
@@ -273,7 +314,7 @@ class BackupManager(
         val last = prefs.getLong(KEY_LAST_BACKUP, 0L)
         if (clock.nowMillis() - last < BackupPolicy.AUTO_INTERVAL_MILLIS) return
         try {
-            exportBackup()
+            exportAutomaticBackup()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -422,6 +463,7 @@ class BackupManager(
             MediaStore.MediaColumns._ID,
             MediaStore.MediaColumns.DISPLAY_NAME,
             MediaStore.MediaColumns.SIZE,
+            MediaStore.MediaColumns.DATE_MODIFIED,
         )
         appContext.contentResolver.query(
             collection,
@@ -433,17 +475,25 @@ class BackupManager(
             val idCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
             val nameCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
             val sizeCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.SIZE)
+            val modifiedCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_MODIFIED)
             while (c.moveToNext()) {
                 val name = c.getString(nameCol) ?: continue
-                if (!BackupPolicy.isBackupFileName(name)) continue
-                val date = BackupPolicy.parseBackupDate(name) ?: continue
-                val millis = date.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                val isAuto = BackupPolicy.isAutomaticBackupFileName(name)
+                if (!isAuto && !BackupPolicy.isBackupFileName(name)) continue
+                val millis = if (isAuto) {
+                    // El nombre del automático no tiene fecha: sidecar o modificación.
+                    autoEntryDateMillis(name, c.getLong(modifiedCol))
+                } else {
+                    val date = BackupPolicy.parseBackupDate(name) ?: continue
+                    date.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                }
                 out.add(
                     BackupEntry(
                         fileName = name,
                         dateMillis = millis,
                         sizeBytes = c.getLong(sizeCol),
                         uri = ContentUris.withAppendedId(collection, c.getLong(idCol)),
+                        isAutomatic = isAuto,
                     ),
                 )
             }
@@ -453,10 +503,18 @@ class BackupManager(
 
     private fun listViaLegacyDir(): List<BackupEntry> {
         val dir = legacyDir()
-        return (dir.listFiles { f -> BackupPolicy.isBackupFileName(f.name) } ?: emptyArray())
+        return (dir.listFiles { f ->
+            BackupPolicy.isBackupFileName(f.name) ||
+                BackupPolicy.isAutomaticBackupFileName(f.name)
+        } ?: emptyArray())
             .mapNotNull { f ->
-                val date = BackupPolicy.parseBackupDate(f.name) ?: return@mapNotNull null
-                val millis = date.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                val isAuto = BackupPolicy.isAutomaticBackupFileName(f.name)
+                val millis = if (isAuto) {
+                    autoEntryDateMillis(f.name, f.lastModified() / 1000)
+                } else {
+                    val date = BackupPolicy.parseBackupDate(f.name) ?: return@mapNotNull null
+                    date.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                }
                 BackupEntry(
                     fileName = f.name,
                     dateMillis = millis,
@@ -464,9 +522,52 @@ class BackupManager(
                     uri = FileProvider.getUriForFile(
                         appContext, "${appContext.packageName}.fileprovider", f,
                     ),
+                    isAutomatic = isAuto,
                 )
             }
             .sortedByDescending { it.dateMillis }
+    }
+
+    /**
+     * Fecha del archivo automático: la del sidecar (`fecha` ISO) y, si no hay
+     * sidecar legible, la fecha de modificación del archivo (en segundos).
+     */
+    private fun autoEntryDateMillis(fileName: String, dateModifiedSec: Long): Long {
+        readSidecar(fileName)?.fecha?.let { iso ->
+            runCatching {
+                LocalDateTime.parse(iso, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                    .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            }.getOrNull()?.let { return it }
+        }
+        return dateModifiedSec * 1000
+    }
+
+    /** Borra un respaldo por nombre (db + sidecar). Para sobrescribir el automático. */
+    private fun deleteByFileName(fileName: String) {
+        if (Build.VERSION.SDK_INT >= 29) {
+            val collection =
+                MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            appContext.contentResolver.query(
+                collection,
+                arrayOf(MediaStore.MediaColumns._ID),
+                "${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ? AND " +
+                    "${MediaStore.MediaColumns.DISPLAY_NAME} = ?",
+                arrayOf("Documents/${BackupPolicy.BACKUP_DIR}/%", fileName),
+                null,
+            )?.use { c ->
+                val idCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+                while (c.moveToNext()) {
+                    val uri = ContentUris.withAppendedId(collection, c.getLong(idCol))
+                    appContext.contentResolver.delete(uri, null, null)
+                }
+            }
+            findSidecarUri(fileName)?.let {
+                appContext.contentResolver.delete(it, null, null)
+            }
+        } else {
+            File(legacyDir(), fileName).delete()
+            File(legacyDir(), BackupPolicy.sidecarFileName(fileName)).delete()
+        }
     }
 
     // ---------- retención ----------

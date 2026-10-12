@@ -18,8 +18,20 @@ object BackupPolicy {
     const val DB_EXTENSION = ".db"
     const val SIDECAR_EXTENSION = ".json"
 
-    /** Cuántos respaldos se conservan (los más nuevos). */
-    const val KEEP_COUNT = 5
+    /** Cuántos respaldos MANUALES se conservan (los más nuevos). */
+    const val KEEP_COUNT = 3
+
+    /**
+     * Archivo único del respaldo automático: cada respaldo automático lo
+     * SOBRESCRIBE, así nunca se acumula (siempre hay uno fresco).
+     * Su nombre NO cumple el formato con fecha a propósito: la retención
+     * lo ignora siempre (ver [selectForRetention]).
+     */
+    const val AUTO_BACKUP_FILE_NAME = "respaldo-automatico.db"
+
+    /** true si es el archivo del respaldo automático. */
+    fun isAutomaticBackupFileName(fileName: String): Boolean =
+        fileName == AUTO_BACKUP_FILE_NAME
 
     /** Intervalo del respaldo automático: 24 h. */
     const val AUTO_INTERVAL_MILLIS = 24L * 60 * 60 * 1000
@@ -69,7 +81,8 @@ object BackupPolicy {
     /**
      * De la lista de respaldos, devuelve los que hay que borrar para
      * conservar los [keep] más nuevos. Los nombres que no siguen el formato
-     * se ignoran (no se borran automáticamente).
+     * se ignoran (no se borran automáticamente) — incluido SIEMPRE el
+     * archivo del respaldo automático ([AUTO_BACKUP_FILE_NAME]).
      */
     fun selectForRetention(
         backups: List<BackupFileInfo>,
@@ -77,6 +90,9 @@ object BackupPolicy {
     ): List<BackupFileInfo> {
         require(keep >= 1) { "keep debe ser >= 1" }
         val dated = backups.mapNotNull { info ->
+            // Blindaje explícito: el automático nunca entra en retención,
+            // ni siquiera si algún día su nombre pareciera tener fecha.
+            if (isAutomaticBackupFileName(info.fileName)) return@mapNotNull null
             parseBackupDate(info.fileName)?.let { date -> date to info }
         }
         if (dated.size <= keep) return emptyList()

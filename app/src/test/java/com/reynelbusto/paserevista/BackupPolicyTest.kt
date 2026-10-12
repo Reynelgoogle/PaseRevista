@@ -71,25 +71,33 @@ class BackupPolicyTest {
         )
 
     @Test
-    fun `con 7 respaldos borra los 2 mas viejos`() {
+    fun `keep por defecto es 3`() {
+        assertEquals(3, BackupPolicy.KEEP_COUNT)
+    }
+
+    @Test
+    fun `con 7 respaldos y keep por defecto borra los 4 mas viejos`() {
         val all = (1..7).map { info(it) }
-        val toDelete = BackupPolicy.selectForRetention(all, keep = 5)
-        assertEquals(2, toDelete.size)
+        val toDelete = BackupPolicy.selectForRetention(all)
+        assertEquals(4, toDelete.size)
         val names = toDelete.map { it.fileName }.toSet()
-        assertTrue("respaldo-2026-10-01-0615.db" in names)
-        assertTrue("respaldo-2026-10-02-0615.db" in names)
+        assertEquals(
+            (1..4).map { "respaldo-2026-10-%02d-0615.db".format(it) }.toSet(),
+            names,
+        )
     }
 
     @Test
-    fun `con 5 respaldos no borra nada`() {
-        val all = (1..5).map { info(it) }
-        assertTrue(BackupPolicy.selectForRetention(all, keep = 5).isEmpty())
-    }
-
-    @Test
-    fun `con menos de 5 no borra nada`() {
+    fun `con 3 respaldos no borra nada`() {
         val all = (1..3).map { info(it) }
-        assertTrue(BackupPolicy.selectForRetention(all, keep = 5).isEmpty())
+        assertTrue(BackupPolicy.selectForRetention(all).isEmpty())
+    }
+
+    @Test
+    fun `con 5 respaldos y keep por defecto borra los 2 mas viejos`() {
+        val all = (1..5).map { info(it) }
+        val toDelete = BackupPolicy.selectForRetention(all)
+        assertEquals(2, toDelete.size)
     }
 
     @Test
@@ -97,11 +105,45 @@ class BackupPolicyTest {
         val all = (1..7).map { info(it) } +
             BackupFileInfo("respaldo-manual-viejo.db", 512) +
             BackupFileInfo("notas.txt", 100)
-        val toDelete = BackupPolicy.selectForRetention(all, keep = 5)
+        val toDelete = BackupPolicy.selectForRetention(all)
         val names = toDelete.map { it.fileName }
         assertFalse("respaldo-manual-viejo.db" in names)
         assertFalse("notas.txt" in names)
-        assertEquals(2, toDelete.size)
+        assertEquals(4, toDelete.size)
+    }
+
+    @Test
+    fun `el archivo automatico nunca entra en retencion`() {
+        val all = (1..7).map { info(it) } +
+            BackupFileInfo(BackupPolicy.AUTO_BACKUP_FILE_NAME, 2048)
+        val toDelete = BackupPolicy.selectForRetention(all)
+        val names = toDelete.map { it.fileName }
+        assertFalse(BackupPolicy.AUTO_BACKUP_FILE_NAME in names)
+        assertEquals(4, toDelete.size)
+    }
+
+    @Test
+    fun `el automatico solo tampoco se borra`() {
+        val all = listOf(BackupFileInfo(BackupPolicy.AUTO_BACKUP_FILE_NAME, 2048))
+        assertTrue(BackupPolicy.selectForRetention(all).isEmpty())
+    }
+
+    @Test
+    fun `nombre del automatico no parsea fecha y se detecta`() {
+        assertNull(BackupPolicy.parseBackupDate(BackupPolicy.AUTO_BACKUP_FILE_NAME))
+        assertFalse(BackupPolicy.isBackupFileName(BackupPolicy.AUTO_BACKUP_FILE_NAME))
+        assertTrue(BackupPolicy.isAutomaticBackupFileName(BackupPolicy.AUTO_BACKUP_FILE_NAME))
+        assertFalse(
+            BackupPolicy.isAutomaticBackupFileName("respaldo-2026-10-06-061523.db"),
+        )
+    }
+
+    @Test
+    fun `sidecar del automatico`() {
+        assertEquals(
+            "respaldo-automatico.json",
+            BackupPolicy.sidecarFileName(BackupPolicy.AUTO_BACKUP_FILE_NAME),
+        )
     }
 
     @Test
