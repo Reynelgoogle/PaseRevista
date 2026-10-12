@@ -6,8 +6,12 @@ import androidx.lifecycle.viewModelScope
 import com.reynelbusto.paserevista.di.AppContainer
 import com.reynelbusto.paserevista.core.IsoDate
 import com.reynelbusto.paserevista.domain.model.BoardColumn
+import com.reynelbusto.paserevista.domain.model.ClinicalPriority
+import com.reynelbusto.paserevista.domain.model.Patient
+import com.reynelbusto.paserevista.domain.repository.PatientRepository
 import com.reynelbusto.paserevista.domain.usecase.BoardItem
 import com.reynelbusto.paserevista.domain.usecase.BoardUseCase
+import com.reynelbusto.paserevista.domain.usecase.DEFAULT_SERVICE_ID
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +26,14 @@ data class BoardUiState(
     val proposed: List<BoardItem> = emptyList(),
     val scheduled: List<BoardItem> = emptyList(),
     val done: List<BoardItem> = emptyList(),
+    /** Texto del buscador flotante. */
+    val query: String = "",
+    /** Píldora de estado activa. null = todas. */
+    val columnFilter: BoardColumn? = null,
+    /** Diálogo de agendar (FAB +). */
+    val showAddDialog: Boolean = false,
+    /** Pacientes para el selector del diálogo. */
+    val dialogPatients: List<Patient> = emptyList(),
     /** Errores transitorios (p. ej. mover tarjeta): van al Snackbar. */
     val error: String? = null,
     /** Fallo de la carga inicial (M7): se muestra con botón Reintentar. */
@@ -32,7 +44,10 @@ data class BoardUiState(
  * Pizarra Kanban: Propuesto → Programado → Realizado.
  * Se alimenta sola de las tarjetas marcadas Listo.
  */
-class BoardViewModel(private val board: BoardUseCase) : ViewModel() {
+class BoardViewModel(
+    private val board: BoardUseCase,
+    private val patients: PatientRepository,
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BoardUiState())
     val uiState: StateFlow<BoardUiState> = _uiState
@@ -117,9 +132,65 @@ class BoardViewModel(private val board: BoardUseCase) : ViewModel() {
         _uiState.value = _uiState.value.copy(error = null)
     }
 
+    /** Buscador flotante. */
+    fun setQuery(query: String) {
+        _uiState.value = _uiState.value.copy(query = query)
+    }
+
+    /** Píldoras de estado: tocar filtra, tocar de nuevo limpia. */
+    fun toggleColumnFilter(column: BoardColumn) {
+        val current = _uiState.value
+        current.copy(columnFilter = if (current.columnFilter == column) null else column)
+            .let { _uiState.value = it }
+    }
+
+    /** FAB +: abre el diálogo de agendar y carga los pacientes. */
+    fun openAddDialog() {
+        _uiState.value = _uiState.value.copy(showAddDialog = true)
+        viewModelScope.launch {
+            try {
+                val list = patients.getActivePatients(DEFAULT_SERVICE_ID)
+                _uiState.value = _uiState.value.copy(dialogPatients = list)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(error = e.message ?: "Error inesperado")
+            }
+        }
+    }
+
+    fun closeAddDialog() {
+        _uiState.value = _uiState.value.copy(showAddDialog = false)
+    }
+
+    /** Confirma el diálogo: crea el procedimiento y cierra. */
+    fun confirmAdd(
+        patientId: String?,
+        kind: String,
+        scheduledDate: IsoDate?,
+        scheduledTime: String?,
+        priority: ClinicalPriority,
+        note: String?,
+    ) {
+        viewModelScope.launch {
+            try {
+                val pid = patientId ?: error("Seleccione el paciente")
+                board.scheduleProcedure(
+                    patientId = pid,
+                    kind = kind,
+                    scheduledDate = scheduledDate,
+                    scheduledTime = scheduledTime,
+                    priority = priority,
+                    note = note,
+                )
+                _uiState.value = _uiState.value.copy(showAddDialog = false)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(error = e.message ?: "Error inesperado")
+            }
+        }
+    }
+
     @Suppress("UNCHECKED_CAST")
     class Factory(private val container: AppContainer) : ViewModelProvider.Factory {
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            BoardViewModel(container.board) as T
+            BoardViewModel(container.board, container.patientRepository) as T
     }
 }

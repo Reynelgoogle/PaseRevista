@@ -154,7 +154,7 @@ class BoardPipelineCrashTest {
             Thread.UncaughtExceptionHandler { _, e -> captured.add(e) }
         val vm: BoardViewModel
         try {
-            vm = BoardViewModel(board)
+            vm = BoardViewModel(board, CrashPatients(emptyMap()))
             testDispatcher.scheduler.advanceUntilIdle()
         } finally {
             Thread.currentThread().uncaughtExceptionHandler = prev

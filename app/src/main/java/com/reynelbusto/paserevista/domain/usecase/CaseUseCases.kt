@@ -442,6 +442,40 @@ class BoardUseCase(
             "Fecha programada → ${clean ?: "sin fecha"}",
         )
     }
+
+    /**
+     * Crea un procedimiento desde el diálogo de la pizarra (FAB +).
+     * Con fecha → Programado; sin fecha → Propuesto.
+     * La pizarra se refresca sola vía [observeBoard].
+     */
+    suspend fun scheduleProcedure(
+        patientId: String,
+        kind: String,
+        scheduledDate: IsoDate?,
+        scheduledTime: String?,
+        priority: ClinicalPriority,
+        note: String?,
+    ) = unitOfWork.atomic {
+        val cleanKind = kind.trim()
+        require(cleanKind.isNotBlank()) { "El procedimiento no puede estar vacío" }
+        val now = clock.nowMillis()
+        val date = scheduledDate?.ifBlank { null }
+        procedures.create(
+            Procedure(
+                id = newId(),
+                patientId = patientId,
+                kind = cleanKind,
+                scheduledDate = date,
+                scheduledTime = scheduledTime?.ifBlank { null },
+                status = if (date != null) ProcedureState.PREPARATION else ProcedureState.PENDING,
+                priority = priority,
+                note = note?.ifBlank { null },
+                createdAt = now,
+                updatedAt = now,
+            ),
+        )
+        history.log(patientId, null, "Procedimiento agendado en pizarra: $cleanKind")
+    }
 }
 
 /** Datos para compartir una tarjeta. */
