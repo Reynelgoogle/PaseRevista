@@ -140,6 +140,10 @@ interface JourneyDao {
     )
     suspend fun findPrevious(serviceId: String, clinicalDate: String): JourneyEntity?
 
+    /** Nota libre del día (agenda). NULL la limpia. */
+    @Query("UPDATE journey SET note = :note, updated_at = :updatedAt WHERE id = :journeyId")
+    suspend fun setNote(journeyId: String, note: String?, updatedAt: Long)
+
     /** Historial de jornadas del servicio (FASE 9), más recientes primero. */
     @Query(
         """SELECT * FROM journey
@@ -497,4 +501,12 @@ interface CaseHistoryDao {
            ORDER BY occurred_at DESC""",
     )
     fun observeByPatient(patientId: String): Flow<List<CaseHistoryEntity>>
+
+    /** Eventos de una jornada (bitácora de la agenda), en orden cronológico. */
+    @Query(
+        """SELECT * FROM case_history
+           WHERE journey_id = :journeyId
+           ORDER BY occurred_at ASC""",
+    )
+    suspend fun getByJourney(journeyId: String): List<CaseHistoryEntity>
 }

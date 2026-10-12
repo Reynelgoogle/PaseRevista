@@ -8,7 +8,9 @@ import com.reynelbusto.paserevista.domain.model.Patient
 import com.reynelbusto.paserevista.domain.model.PatientState
 import com.reynelbusto.paserevista.domain.model.Pending
 import com.reynelbusto.paserevista.domain.model.ProcedureState
+import com.reynelbusto.paserevista.domain.repository.CaseHistoryRepository
 import com.reynelbusto.paserevista.domain.repository.ClinicalUnitOfWork
+import com.reynelbusto.paserevista.domain.repository.JourneyRepository
 import com.reynelbusto.paserevista.domain.repository.PatientRepository
 import com.reynelbusto.paserevista.domain.repository.PendingRepository
 import com.reynelbusto.paserevista.domain.repository.ProcedureRepository
@@ -28,6 +30,8 @@ class DischargeUseCase(
     private val patients: PatientRepository,
     private val pendings: PendingRepository,
     private val procedures: ProcedureRepository,
+    private val history: CaseHistoryRepository,
+    private val journeys: JourneyRepository,
     private val clock: Clock,
 ) {
     sealed interface Check {
@@ -81,6 +85,14 @@ class DischargeUseCase(
             dischargeReason = reason?.ifBlank { null },
         )
         patients.updatePatient(updated)
+        // La bitácora de la agenda cuenta el alta: se registra en el
+        // historial con la jornada del día del egreso.
+        val journey = journeys.getJourney(DEFAULT_SERVICE_ID, dischargeDate)
+        history.log(
+            patient.id,
+            journey?.id,
+            "Alta — ${reason?.ifBlank { null } ?: "egreso"}",
+        )
         updated
     }
 

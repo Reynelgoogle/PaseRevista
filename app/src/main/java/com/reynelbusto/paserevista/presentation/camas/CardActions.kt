@@ -4,6 +4,7 @@ import com.reynelbusto.paserevista.di.AppContainer
 import com.reynelbusto.paserevista.domain.model.CustomField
 import com.reynelbusto.paserevista.domain.model.Sex
 import com.reynelbusto.paserevista.domain.usecase.CaseCardPatch
+import com.reynelbusto.paserevista.domain.usecase.DEFAULT_SERVICE_ID
 import com.reynelbusto.paserevista.domain.usecase.DischargeUseCase
 import com.reynelbusto.paserevista.presentation.components.PendingFormData
 
@@ -57,7 +58,12 @@ class CardActions(private val container: AppContainer) {
         )
 
     suspend fun completePending(pendingId: String) =
-        container.pendings.complete(pendingId, journeyResolutionId = null)
+        container.pendings.complete(
+            pendingId,
+            // La jornada real: la bitácora de la agenda cuenta el pendiente
+            // resuelto en el día que se resolvió.
+            journeyResolutionId = container.ensureDay(DEFAULT_SERVICE_ID),
+        )
 
     suspend fun deleteCase(patientId: String) = container.deleteCase.invoke(patientId)
 

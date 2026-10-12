@@ -2,10 +2,18 @@ package com.reynelbusto.paserevista
 
 import com.reynelbusto.paserevista.presentation.agenda.AgendaDayInput
 import com.reynelbusto.paserevista.presentation.agenda.BedMark
+import com.reynelbusto.paserevista.presentation.agenda.DayEventType
+import com.reynelbusto.paserevista.presentation.agenda.DayLayout
 import com.reynelbusto.paserevista.presentation.agenda.agendaDayTitle
+import com.reynelbusto.paserevista.presentation.agenda.buildDayEvents
+import com.reynelbusto.paserevista.presentation.agenda.classifyHistoryEvent
+import com.reynelbusto.paserevista.presentation.agenda.computeDayIndices
 import com.reynelbusto.paserevista.presentation.agenda.computeDayMarks
+import com.reynelbusto.paserevista.presentation.agenda.dayOfMonth
+import com.reynelbusto.paserevista.presentation.agenda.formatHour
 import com.reynelbusto.paserevista.presentation.agenda.markBeds
 import com.reynelbusto.paserevista.presentation.agenda.prettyDayEs
+import com.reynelbusto.paserevista.domain.model.CaseHistoryEntry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -76,5 +84,85 @@ class AgendaLogicTest {
             "Martes 6 de octubre",
             agendaDayTitle("2026-10-06", "2026-10-08"),
         )
+    }
+
+    /* ── Bitácora del día ── */
+
+    @Test
+    fun `classifyHistoryEvent por convenciones de texto`() {
+        assertEquals(DayEventType.INGRESO, classifyHistoryEvent("Cama 5 añadida"))
+        assertEquals(DayEventType.ALTA, classifyHistoryEvent("Alta — egreso"))
+        assertEquals(DayEventType.ALTA, classifyHistoryEvent("Alta — a su domicilio"))
+        assertEquals(
+            DayEventType.PENDIENTE,
+            classifyHistoryEvent("Pendiente completado: hemoglobina"),
+        )
+        assertEquals(
+            DayEventType.PIZARRA,
+            classifyHistoryEvent("Marcada LISTO — sube a la pizarra"),
+        )
+        assertEquals(
+            DayEventType.PIZARRA,
+            classifyHistoryEvent("Vuelve a Pendiente — baja de la pizarra"),
+        )
+        assertEquals(
+            DayEventType.CAMBIO,
+            classifyHistoryEvent("Diagnóstico: colecistitis → colelitiasis"),
+        )
+    }
+
+    @Test
+    fun `buildDayEvents ordena por hora y resuelve la cama`() {
+        val entries = listOf(
+            CaseHistoryEntry("h2", "p2", "j1", 2000L, "Alta — egreso"),
+            CaseHistoryEntry("h1", "p1", "j1", 1000L, "Cama 5 añadida"),
+            CaseHistoryEntry("h3", "p9", "j1", 1500L, "Diagnóstico: x"),
+        )
+        val events = buildDayEvents(entries, mapOf("p1" to "5", "p2" to "7"))
+        assertEquals(3, events.size)
+        assertEquals(1000L, events[0].occurredAt)
+        assertEquals("5", events[0].bed)
+        assertEquals(DayEventType.INGRESO, events[0].type)
+        assertEquals(1500L, events[1].occurredAt)
+        assertEquals(null, events[1].bed)
+        assertEquals(DayEventType.CAMBIO, events[1].type)
+        assertEquals(2000L, events[2].occurredAt)
+        assertEquals("7", events[2].bed)
+        assertEquals(DayEventType.ALTA, events[2].type)
+    }
+
+    /* ── Hora y tira de fechas ── */
+
+    @Test
+    fun `formatHour devuelve HH-mm`() {
+        // 2026-10-11T14:35:00Z en cualquier zona: formato de 5 caracteres.
+        val h = formatHour(1760193300000L)
+        assertTrue(h.matches(Regex("\\d{2}:\\d{2}")))
+    }
+
+    @Test
+    fun `dayOfMonth extrae el día`() {
+        assertEquals("8", dayOfMonth("2026-10-08"))
+        assertEquals("1", dayOfMonth("2026-10-01"))
+        assertEquals("no-fecha", dayOfMonth("no-fecha"))
+    }
+
+    @Test
+    fun `computeDayIndices respeta el orden de ítems por día`() {
+        // Día 1: cabecera + nota + etiqueta + 2 eventos + 3 camas = 8 ítems.
+        // Día 2: cabecera + nota + 1 cama = 3 ítems (sin eventos).
+        val indices = computeDayIndices(
+            listOf(
+                DayLayout("j1", hasEvents = true, eventCount = 2, rowCount = 3),
+                DayLayout("j2", hasEvents = false, eventCount = 0, rowCount = 1),
+            ),
+        )
+        assertEquals(0, indices["j1"])
+        assertEquals(8, indices["j2"])
+    }
+
+    @Test
+    fun `computeDayIndices con lista vacía no falla`() {
+        assertTrue(computeDayIndices(emptyList()).isEmpty())
     }
 }

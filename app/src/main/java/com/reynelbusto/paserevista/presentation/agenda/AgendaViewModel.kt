@@ -27,7 +27,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
-/** Una "página" de la agenda: un día con sus camas. */
+/** Una "página" de la agenda: un día con su bitácora y sus camas. */
 data class AgendaDaySection(
     val journeyId: String,
     val date: IsoDate,
@@ -37,6 +37,10 @@ data class AgendaDaySection(
     val marks: Map<String, BedMark>,
     /** Jornada de hoy: se edita siempre, sin pulsar "Corregir". */
     val isToday: Boolean,
+    /** Nota libre del día. NULL = sin nota. */
+    val note: String?,
+    /** "Lo que pasó": eventos del día en orden cronológico. */
+    val events: List<DayEvent>,
 )
 
 data class AgendaUiState(
@@ -80,6 +84,8 @@ class AgendaViewModel(
 
     /** Caché por jornada: los días sin edición son inmutables en la práctica. */
     private val rowCache = mutableMapOf<String, List<CardRow>>()
+    /** Caché de la bitácora por jornada (hoy siempre se recarga). */
+    private val eventCache = mutableMapOf<String, List<DayEvent>>()
 
     init {
         subscribe()
@@ -150,15 +156,33 @@ class AgendaViewModel(
                 val rows = rowCache.getOrPut(journey.id) {
                     container.loadCardRows(journey.id, onlyActive = false)
                 }
-                // Días sin camas: se omiten, sin ruido.
-                if (rows.isEmpty()) null else journey to rows
+                val bedByPatient = rows.associate { it.patient.id to it.card.bed }
+                // La bitácora de hoy se recarga siempre (cambia con el trabajo
+                // del día); los días pasados se cachean.
+                val events = if (journey.clinicalDate == today) {
+                    eventCache.remove(journey.id)
+                    buildDayEvents(
+                        container.caseHistoryRepository.getByJourney(journey.id),
+                        bedByPatient,
+                    )
+                } else {
+                    eventCache.getOrPut(journey.id) {
+                        buildDayEvents(
+                            container.caseHistoryRepository.getByJourney(journey.id),
+                            bedByPatient,
+                        )
+                    }
+                }
+                // Días sin camas ni eventos: se omiten, sin ruido.
+                if (rows.isEmpty() && events.isEmpty()) null
+                else Triple(journey, rows, events)
             }
             val marksByDate = computeDayMarks(
-                withRows.map { (journey, rows) ->
+                withRows.map { (journey, rows, _) ->
                     AgendaDayInput(journey.clinicalDate, rows.map { it.card.bed }.toSet())
                 },
             )
-            val sections = withRows.map { (journey, rows) ->
+            val sections = withRows.map { (journey, rows, events) ->
                 val bedMarks = marksByDate[journey.clinicalDate].orEmpty()
                 AgendaDaySection(
                     journeyId = journey.id,
@@ -167,6 +191,8 @@ class AgendaViewModel(
                     rows = rows,
                     marks = rows.associate { it.card.id to (bedMarks[it.card.bed] ?: BedMark.NEW) },
                     isToday = journey.clinicalDate == today,
+                    note = journey.note,
+                    events = events,
                 )
             }
             _uiState.value = _uiState.value.copy(
@@ -203,7 +229,30 @@ class AgendaViewModel(
                 )
             }
             rowCache.clear()
+            eventCache.clear()
             rebuild()
+        }
+    }
+
+    /**
+     * Guarda la nota libre del día. Vacía la limpia (regla de oro: todo
+     * opcional). Es edición propia de la agenda, no toca las tarjetas.
+     */
+    fun saveNote(journeyId: String, note: String?) {
+        viewModelScope.launch {
+            try {
+                val clean = note?.trim()?.ifBlank { null }
+                container.journeyRepository.setNote(journeyId, clean)
+                journeys = journeys.map { j ->
+                    if (j.id == journeyId) j.copy(note = clean) else j
+                }
+                rowCache.remove(journeyId)
+                rebuild()
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    actionError = e.message ?: "No se pudo guardar la nota",
+                )
+            }
         }
     }
 

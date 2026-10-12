@@ -38,6 +38,8 @@ interface JourneyRepository {
     suspend fun findPreviousJourney(serviceId: String, clinicalDate: String): Journey?
     /** Historial de jornadas del servicio, recientes primero. */
     fun observeJourneys(serviceId: String): Flow<List<Journey>>
+    /** Nota libre del día (agenda). NULL la limpia. */
+    suspend fun setNote(journeyId: String, note: String?)
 }
 
 interface DailyRecordRepository {
@@ -138,4 +140,6 @@ interface CustomFieldRepository {
 interface CaseHistoryRepository {
     fun observeByPatient(patientId: String): Flow<List<CaseHistoryEntry>>
     suspend fun log(patientId: String, journeyId: String?, summary: String)
+    /** Eventos de una jornada (bitácora de la agenda), en orden cronológico. */
+    suspend fun getByJourney(journeyId: String): List<CaseHistoryEntry>
 }

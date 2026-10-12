@@ -8,6 +8,8 @@ import com.reynelbusto.paserevista.domain.model.ClinicalPriority
 import com.reynelbusto.paserevista.domain.model.Pending
 import com.reynelbusto.paserevista.domain.model.PendingState
 import com.reynelbusto.paserevista.domain.model.PendingType
+import com.reynelbusto.paserevista.domain.model.displayDescription
+import com.reynelbusto.paserevista.domain.repository.CaseHistoryRepository
 import com.reynelbusto.paserevista.domain.repository.PendingRepository
 
 /**
@@ -17,6 +19,7 @@ import com.reynelbusto.paserevista.domain.repository.PendingRepository
  */
 class PendingUseCase(
     private val pendings: PendingRepository,
+    private val history: CaseHistoryRepository,
     private val clock: Clock,
 ) {
     suspend fun create(
@@ -79,6 +82,12 @@ class PendingUseCase(
             resolvedAt = clock.nowMillis(),
         )
         pendings.update(updated)
+        // La bitácora de la agenda cuenta el pendiente resuelto.
+        history.log(
+            pending.patientId,
+            journeyResolutionId,
+            "Pendiente completado: ${pending.displayDescription()}",
+        )
         return updated
     }
 

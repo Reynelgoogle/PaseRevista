@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -51,6 +52,7 @@ import com.reynelbusto.paserevista.domain.model.displayName
 import com.reynelbusto.paserevista.domain.model.displayDescription
 import com.reynelbusto.paserevista.domain.usecase.ShareFormatter
 import com.reynelbusto.paserevista.presentation.camas.AddBedDialog
+import com.reynelbusto.paserevista.presentation.camas.CardRow
 import com.reynelbusto.paserevista.presentation.components.CaseCardView
 import com.reynelbusto.paserevista.presentation.components.EmptyState
 import com.reynelbusto.paserevista.presentation.theme.TextSecondary
@@ -73,6 +75,18 @@ fun AgendaScreen(container: AppContainer) {
     var showAddBed by remember { mutableStateOf(false) }
     val showTodayFab by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 2 }
+    }
+    // Diálogo de nota del día: qué jornada se está editando.
+    var noteTarget by remember { mutableStateOf<AgendaDaySection?>(null) }
+
+    // Índice Lazy de la cabecera de cada día (para la tira de fechas).
+    // Orden por día: cabecera(1) + nota(1) + ["Lo que pasó"(1) + eventos] + camas.
+    val dayIndices = remember(state.sections) {
+        computeDayIndices(
+            state.sections.map {
+                DayLayout(it.journeyId, it.events.isNotEmpty(), it.events.size, it.rows.size)
+            },
+        )
     }
 
     fun shareText(text: String) {
@@ -98,14 +112,25 @@ fun AgendaScreen(container: AppContainer) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Agenda") },
-                actions = {
-                    IconButton(onClick = { showAddBed = true }) {
-                        Icon(Icons.Filled.Add, contentDescription = "Añadir cama")
-                    }
-                },
-            )
+            Column {
+                TopAppBar(
+                    title = { Text("Agenda") },
+                    actions = {
+                        IconButton(onClick = { showAddBed = true }) {
+                            Icon(Icons.Filled.Add, contentDescription = "Añadir cama")
+                        }
+                    },
+                )
+                if (state.sections.isNotEmpty()) {
+                    DateStrip(
+                        sections = state.sections,
+                        dayIndices = dayIndices,
+                        onSelectDay = { index ->
+                            scope.launch { listState.animateScrollToItem(index) }
+                        },
+                    )
+                }
+            }
         },
         snackbarHost = { SnackbarHost(snackbar) },
         floatingActionButton = {
@@ -157,6 +182,7 @@ fun AgendaScreen(container: AppContainer) {
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 state.sections.forEach { section ->
+                    // Cabecera de Reynel: título + resumen + compartir + "Corregir día".
                     item(key = "day-${section.journeyId}") {
                         DayHeader(
                             section = section,
@@ -165,47 +191,61 @@ fun AgendaScreen(container: AppContainer) {
                             onShareDay = { shareText(vm.shareDayText(section)) },
                         )
                     }
-                    val editable = section.isToday || section.journeyId in state.editingJourneyIds
-                    items(section.rows, key = { "card-${it.card.id}" }) { row ->
-                        CaseCardView(
-                            row = row,
-                            displayName = vm.displayName(row),
-                            recentDiagnoses = state.recentDiagnoses,
-                            readOnly = !editable,
-                            originMark = when (section.marks[row.card.id]) {
-                                BedMark.CONTINUING -> "viene de ayer"
-                                BedMark.NEW -> "nuevo hoy"
-                                null -> null
-                            },
-                            onToggleReady = { vm.toggleReady(row.card.id) },
-                            onSaveFields = { patch -> vm.saveFields(row.card.id, patch) },
-                            onSavePatientDetails = { name, hc, group, allergies, addr, dx, out, sex ->
-                                vm.savePatientDetails(
-                                    row.patient.id, name, hc, group, allergies, addr, dx, out, sex,
-                                )
-                            },
-                            onAddCustomField = { label, value ->
-                                vm.addCustomField(row.patient.id, label, value)
-                            },
-                            onRenameCustomField = { field, newLabel ->
-                                vm.renameCustomField(field, newLabel)
-                            },
-                            onSetCustomFieldValue = { field, value ->
-                                vm.setCustomFieldValue(field, value)
-                            },
-                            onDeleteCustomField = { field -> vm.deleteCustomField(field) },
-                            onAddPending = { form -> vm.addPending(row.patient.id, form) },
-                            onCompletePending = { id -> vm.completePending(id) },
-                            onDischarge = { vm.dischargeBed(row.patient.id) },
-                            onShare = { complete ->
-                                shareText(
-                                    if (complete) ShareFormatter.cardComplete(row.shareData())
-                                    else ShareFormatter.cardSimple(row.shareData()),
-                                )
-                            },
-                            onDeleteCase = { vm.deleteCase(row.patient.id) },
-                            modifier = Modifier.fillMaxWidth(),
+                    // Nota libre del día.
+                    item(key = "note-${section.journeyId}") {
+                        DayNoteRow(
+                            note = section.note,
+                            onEdit = { noteTarget = section },
                         )
+                    }
+                    // "Lo que pasó": bitácora cronológica del día.
+                    if (section.events.isNotEmpty()) {
+                        item(key = "events-label-${section.journeyId}") {
+                            Text(
+                                "Lo que pasó",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextSecondary,
+                                modifier = Modifier.padding(top = 6.dp, bottom = 2.dp),
+                            )
+                        }
+                        itemsIndexed(
+                            section.events,
+                            key = { index, _ -> "event-${section.journeyId}-$index" },
+                        ) { index, event ->
+                            DayEventRow(
+                                event = event,
+                                isLast = index == section.events.lastIndex,
+                            )
+                        }
+                    }
+                    // Camas: filas compactas; el toque expande la tarjeta inline,
+                    // editable cuando el día lo permite (hoy o "Corregir día").
+                    val editable = section.isToday || section.journeyId in state.editingJourneyIds
+                    items(section.rows, key = { "bedrow-${it.card.id}" }) { row ->
+                        var expanded by remember { mutableStateOf(false) }
+                        if (expanded) {
+                            ExpandedAgendaCard(
+                                vm = vm,
+                                row = row,
+                                section = section,
+                                editable = editable,
+                                recentDiagnoses = state.recentDiagnoses,
+                                onShareText = ::shareText,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        } else {
+                            AgendaBedRow(
+                                row = row,
+                                originMark = when (section.marks[row.card.id]) {
+                                    BedMark.CONTINUING -> "viene de ayer"
+                                    BedMark.NEW -> "nuevo hoy"
+                                    null -> null
+                                },
+                                onExpand = { expanded = true },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                     }
                 }
                 if (state.canLoadMore) {
@@ -257,6 +297,76 @@ fun AgendaScreen(container: AppContainer) {
             },
         )
     }
+
+    // Nota libre del día (única edición propia de la agenda).
+    val target = noteTarget
+    if (target != null) {
+        NoteEditDialog(
+            initial = target.note ?: "",
+            onSave = { text ->
+                vm.saveNote(target.journeyId, text)
+                noteTarget = null
+            },
+            onClear = {
+                vm.saveNote(target.journeyId, null)
+                noteTarget = null
+            },
+            onDismiss = { noteTarget = null },
+        )
+    }
+}
+
+/** Tarjeta completa inline al expandir una fila compacta: conserva toda la edición de Reynel. */
+@Composable
+private fun ExpandedAgendaCard(
+    vm: AgendaViewModel,
+    row: CardRow,
+    section: AgendaDaySection,
+    editable: Boolean,
+    recentDiagnoses: List<String>,
+    onShareText: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    CaseCardView(
+        row = row,
+        displayName = vm.displayName(row),
+        recentDiagnoses = recentDiagnoses,
+        initiallyExpanded = true,
+        readOnly = !editable,
+        originMark = when (section.marks[row.card.id]) {
+            BedMark.CONTINUING -> "viene de ayer"
+            BedMark.NEW -> "nuevo hoy"
+            null -> null
+        },
+        onToggleReady = { vm.toggleReady(row.card.id) },
+        onSaveFields = { patch -> vm.saveFields(row.card.id, patch) },
+        onSavePatientDetails = { name, hc, group, allergies, addr, dx, out, sex ->
+            vm.savePatientDetails(
+                row.patient.id, name, hc, group, allergies, addr, dx, out, sex,
+            )
+        },
+        onAddCustomField = { label, value ->
+            vm.addCustomField(row.patient.id, label, value)
+        },
+        onRenameCustomField = { field, newLabel ->
+            vm.renameCustomField(field, newLabel)
+        },
+        onSetCustomFieldValue = { field, value ->
+            vm.setCustomFieldValue(field, value)
+        },
+        onDeleteCustomField = { field -> vm.deleteCustomField(field) },
+        onAddPending = { form -> vm.addPending(row.patient.id, form) },
+        onCompletePending = { id -> vm.completePending(id) },
+        onDischarge = { vm.dischargeBed(row.patient.id) },
+        onShare = { complete ->
+            onShareText(
+                if (complete) ShareFormatter.cardComplete(row.shareData())
+                else ShareFormatter.cardSimple(row.shareData()),
+            )
+        },
+        onDeleteCase = { vm.deleteCase(row.patient.id) },
+        modifier = modifier,
+    )
 }
 
 /** Cabecera de un día: título + resumen + compartir el día + "Corregir". */

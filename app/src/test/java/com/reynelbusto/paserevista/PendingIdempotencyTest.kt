@@ -1,8 +1,10 @@
 package com.reynelbusto.paserevista
 
 import com.reynelbusto.paserevista.core.Clock
+import com.reynelbusto.paserevista.domain.model.CaseHistoryEntry
 import com.reynelbusto.paserevista.domain.model.Pending
 import com.reynelbusto.paserevista.domain.model.displayDescription
+import com.reynelbusto.paserevista.domain.repository.CaseHistoryRepository
 import com.reynelbusto.paserevista.domain.repository.PendingRepository
 import com.reynelbusto.paserevista.domain.usecase.PendingUseCase
 import kotlinx.coroutines.flow.Flow
@@ -52,10 +54,21 @@ private class IdemPendings : PendingRepository {
  */
 class PendingIdempotencyTest {
 
+    private fun newUseCase(repo: IdemPendings): PendingUseCase {
+        val history = object : CaseHistoryRepository {
+            override fun observeByPatient(patientId: String): Flow<List<CaseHistoryEntry>> =
+                MutableStateFlow(emptyList())
+            override suspend fun log(patientId: String, journeyId: String?, summary: String) = Unit
+            override suspend fun getByJourney(journeyId: String): List<CaseHistoryEntry> =
+                emptyList()
+        }
+        return PendingUseCase(repo, history, IdemClock())
+    }
+
     @Test
     fun `crear pendiente acepta descripcion vacia`() = runTest {
         val repo = IdemPendings()
-        val useCase = PendingUseCase(repo, IdemClock())
+        val useCase = newUseCase(repo)
 
         val created = useCase.create(patientId = "p1", description = "   ")
 
@@ -66,7 +79,7 @@ class PendingIdempotencyTest {
     @Test
     fun `doble tap con la misma clave no duplica`() = runTest {
         val repo = IdemPendings()
-        val useCase = PendingUseCase(repo, IdemClock())
+        val useCase = newUseCase(repo)
         val key = "tap-123"
 
         val first = useCase.create(
@@ -84,7 +97,7 @@ class PendingIdempotencyTest {
     @Test
     fun `claves distintas si crean pendientes distintos`() = runTest {
         val repo = IdemPendings()
-        val useCase = PendingUseCase(repo, IdemClock())
+        val useCase = newUseCase(repo)
 
         useCase.create(patientId = "p1", description = "A", idempotencyKey = "k1")
         useCase.create(patientId = "p1", description = "B", idempotencyKey = "k2")
