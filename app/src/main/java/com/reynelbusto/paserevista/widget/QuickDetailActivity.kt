@@ -20,6 +20,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
@@ -47,6 +50,10 @@ import com.reynelbusto.paserevista.PaseRevistaApp
 import com.reynelbusto.paserevista.domain.model.CaseCard
 import com.reynelbusto.paserevista.domain.model.Pending
 import com.reynelbusto.paserevista.domain.usecase.DEFAULT_SERVICE_ID
+import com.reynelbusto.paserevista.presentation.components.TintedCircleIcon
+import com.reynelbusto.paserevista.presentation.components.mapsPrimaryColors
+import com.reynelbusto.paserevista.presentation.theme.ClinicalStable
+import com.reynelbusto.paserevista.presentation.theme.ClinicalWatch
 import com.reynelbusto.paserevista.presentation.theme.PaseRevistaTheme
 import java.util.UUID
 import kotlinx.coroutines.launch
@@ -138,7 +145,7 @@ private fun QuickDetailScreen(cardId: String, onClose: () -> Unit) {
             modifier = Modifier
                 .padding(24.dp)
                 .fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(28.dp),
         ) {
             Column(
                 modifier = Modifier.padding(20.dp),
@@ -146,6 +153,15 @@ private fun QuickDetailScreen(cardId: String, onClose: () -> Unit) {
             ) {
                 // Cabecera.
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    TintedCircleIcon(
+                        icon = if (current?.ready == true) Icons.Filled.CheckCircle
+                        else Icons.Filled.HourglassEmpty,
+                        iconColor = if (current?.ready == true) ClinicalStable
+                        else ClinicalWatch,
+                        circleSize = 44.dp,
+                        iconSize = 22.dp,
+                    )
+                    Spacer(Modifier.width(12.dp))
                     Text(
                         text = "CAMA ${current?.bed ?: "…"}",
                         style = MaterialTheme.typography.titleLarge,
@@ -247,6 +263,7 @@ private fun QuickDetailScreen(cardId: String, onClose: () -> Unit) {
                                 afterMutation()
                             }
                         },
+                        colors = mapsPrimaryColors(),
                     ) { Text("＋") }
                 }
 
@@ -266,6 +283,7 @@ private fun QuickDetailScreen(cardId: String, onClose: () -> Unit) {
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
+                        colors = mapsPrimaryColors(),
                     ) {
                         Text(if (current.ready) "↩ Volver a Pendiente" else "✓ Marcar Listo")
                     }

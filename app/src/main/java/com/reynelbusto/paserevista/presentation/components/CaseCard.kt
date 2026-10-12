@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -18,7 +19,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -64,6 +69,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import com.reynelbusto.paserevista.presentation.theme.ClinicalCritical
 import com.reynelbusto.paserevista.presentation.theme.ClinicalStable
+import com.reynelbusto.paserevista.presentation.theme.MapsBlue
 import com.reynelbusto.paserevista.presentation.theme.TextPrimary
 import java.time.Instant
 import java.time.ZoneId
@@ -145,6 +151,13 @@ fun CaseCardView(
                     )
                     Spacer(Modifier.width(10.dp))
                     StatusPill(ready = card.ready)
+                    Spacer(Modifier.width(10.dp))
+                    TintedCircleIcon(
+                        icon = Icons.Filled.Person,
+                        iconColor = accent,
+                        circleSize = 40.dp,
+                        iconSize = 22.dp,
+                    )
                     Spacer(Modifier.weight(1f))
                     IconButton(onClick = { showMenu = true }) {
                         Icon(Icons.Filled.MoreVert, contentDescription = "Opciones")
@@ -256,14 +269,19 @@ fun CaseCardView(
                     if (!readOnly) {
                         Button(
                             onClick = onToggleReady,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 48.dp),
+                            colors = mapsPrimaryColors(),
                         ) {
                             Text(if (card.ready) "Volver a pendiente" else "✓ Marcar Listo")
                         }
                     }
                     OutlinedButton(
                         onClick = { showShareChoice = true },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp),
                     ) {
                         Text("Compartir")
                     }
@@ -296,12 +314,24 @@ fun CaseCardView(
                         .padding(horizontal = 14.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    Text(
-                        text = "CAMA ${card.bed}",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary,
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = "CAMA ${card.bed}",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TintedCircleIcon(
+                            icon = Icons.Filled.Person,
+                            iconColor = accent,
+                            circleSize = 40.dp,
+                            iconSize = 22.dp,
+                        )
+                    }
                     val summary = listOfNotNull(
                         card.diagnosis?.takeIf { it.isNotBlank() },
                         card.scheduledProcedure?.takeIf { it.isNotBlank() },
@@ -312,18 +342,18 @@ fun CaseCardView(
                         color = TextSecondary,
                     )
                     val pendCount = row.openPendings.size
-                    Text(
-                        text = if (card.ready) {
-                            "✓ LISTO"
-                        } else if (pendCount > 0) {
-                            "⚠ $pendCount pendiente${if (pendCount == 1) "" else "s"}"
-                        } else {
-                            "Pendiente"
-                        },
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = accent,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        StatusPill(ready = card.ready)
+                        if (!card.ready && pendCount > 0) {
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = "⚠ $pendCount pendiente${if (pendCount == 1) "" else "s"}",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = accent,
+                            )
+                        }
+                    }
                     MarcasRow(row)
                     if (originMark != null) {
                         Text(
@@ -369,7 +399,14 @@ fun CaseCardView(
         var confirmDelete by remember { mutableStateOf(false) }
         AlertDialog(
             onDismissRequest = { renameField = null },
-            title = { Text("Apartado") },
+            shape = DialogShape28,
+            title = {
+                ExpressiveDialogTitle(
+                    icon = Icons.Filled.Edit,
+                    iconColor = MapsBlue,
+                    title = "Apartado",
+                )
+            },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
@@ -385,13 +422,16 @@ fun CaseCardView(
                 }
             },
             confirmButton = {
-                Button(onClick = {
-                    if (newLabel.isNotBlank() && newLabel != field.label) {
-                        onRenameCustomField(field, newLabel)
-                    }
-                    if (newValue != field.value) onSetCustomFieldValue(field, newValue)
-                    renameField = null
-                }) { Text("Guardar") }
+                Button(
+                    onClick = {
+                        if (newLabel.isNotBlank() && newLabel != field.label) {
+                            onRenameCustomField(field, newLabel)
+                        }
+                        if (newValue != field.value) onSetCustomFieldValue(field, newValue)
+                        renameField = null
+                    },
+                    colors = mapsPrimaryColors(),
+                ) { Text("Guardar") }
             },
             dismissButton = {
                 Row {
@@ -405,7 +445,14 @@ fun CaseCardView(
         if (confirmDelete) {
             AlertDialog(
                 onDismissRequest = { confirmDelete = false },
-                title = { Text("Eliminar apartado") },
+                shape = DialogShape28,
+                title = {
+                    ExpressiveDialogTitle(
+                        icon = Icons.Filled.Delete,
+                        iconColor = MaterialTheme.colorScheme.error,
+                        title = "Eliminar apartado",
+                    )
+                },
                 text = { Text("¿Eliminar «${field.label}»?") },
                 confirmButton = {
                     Button(onClick = {
@@ -431,15 +478,28 @@ fun CaseCardView(
     if (showShareChoice) {
         AlertDialog(
             onDismissRequest = { showShareChoice = false },
-            title = { Text("Compartir tarjeta") },
+            shape = DialogShape28,
+            title = {
+                ExpressiveDialogTitle(
+                    icon = Icons.Filled.Share,
+                    iconColor = MapsBlue,
+                    title = "Compartir tarjeta",
+                )
+            },
             text = { Text("¿Versión simple o caso completo?") },
             confirmButton = {
-                Button(onClick = { showShareChoice = false; onShare(false) }) {
+                Button(
+                    onClick = { showShareChoice = false; onShare(false) },
+                    colors = mapsPrimaryColors(),
+                ) {
                     Text("Simple")
                 }
             },
             dismissButton = {
-                Button(onClick = { showShareChoice = false; onShare(true) }) {
+                Button(
+                    onClick = { showShareChoice = false; onShare(true) },
+                    colors = mapsPrimaryColors(),
+                ) {
                     Text("Completa")
                 }
             },
@@ -448,10 +508,20 @@ fun CaseCardView(
     if (showDischarge) {
         AlertDialog(
             onDismissRequest = { showDischarge = false },
-            title = { Text("Dar de alta") },
+            shape = DialogShape28,
+            title = {
+                ExpressiveDialogTitle(
+                    icon = Icons.Filled.ExitToApp,
+                    iconColor = ClinicalStable,
+                    title = "Dar de alta",
+                )
+            },
             text = { Text("¿La cama ${card.bed} queda libre? La tarjeta sale del listado.") },
             confirmButton = {
-                Button(onClick = { showDischarge = false; onDischarge() }) { Text("Dar de alta") }
+                Button(
+                    onClick = { showDischarge = false; onDischarge() },
+                    colors = mapsPrimaryColors(),
+                ) { Text("Dar de alta") }
             },
             dismissButton = {
                 TextButton(onClick = { showDischarge = false }) { Text("Cancelar") }
@@ -461,7 +531,14 @@ fun CaseCardView(
     if (showDeleteCase) {
         AlertDialog(
             onDismissRequest = { showDeleteCase = false },
-            title = { Text("Borrar tarjeta") },
+            shape = DialogShape28,
+            title = {
+                ExpressiveDialogTitle(
+                    icon = Icons.Filled.Delete,
+                    iconColor = MaterialTheme.colorScheme.error,
+                    title = "Borrar tarjeta",
+                )
+            },
             text = {
                 Text(
                     "Se eliminará por completo el caso de la cama ${card.bed} " +
@@ -585,7 +662,14 @@ fun EditFieldsDialog(
     var antibiotic by remember { mutableStateOf(card.antibiotic) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Editar tarjeta — Cama ${card.bed}") },
+        shape = DialogShape28,
+        title = {
+            ExpressiveDialogTitle(
+                icon = Icons.Filled.Edit,
+                iconColor = MapsBlue,
+                title = "Editar tarjeta — Cama ${card.bed}",
+            )
+        },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -628,19 +712,22 @@ fun EditFieldsDialog(
             }
         },
         confirmButton = {
-            Button(onClick = {
-                onConfirm(
-                    CaseCardPatch(
-                        diagnosis = diagnosis.ifBlank { null },
-                        scheduledProcedure = procedure?.ifBlank { null },
-                        currentState = state?.ifBlank { null },
-                        antibiotic = antibiotic?.ifBlank { null },
-                        fieldsTouched = setOf(
-                            "diagnosis", "scheduledProcedure", "currentState", "antibiotic",
+            Button(
+                onClick = {
+                    onConfirm(
+                        CaseCardPatch(
+                            diagnosis = diagnosis.ifBlank { null },
+                            scheduledProcedure = procedure?.ifBlank { null },
+                            currentState = state?.ifBlank { null },
+                            antibiotic = antibiotic?.ifBlank { null },
+                            fieldsTouched = setOf(
+                                "diagnosis", "scheduledProcedure", "currentState", "antibiotic",
+                            ),
                         ),
-                    ),
-                )
-            }) { Text("Guardar") }
+                    )
+                },
+                colors = mapsPrimaryColors(),
+            ) { Text("Guardar") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
     )
@@ -667,7 +754,14 @@ fun PatientDataDialog(
     var sex by remember { mutableStateOf(patient.sex) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Datos del paciente") },
+        shape = DialogShape28,
+        title = {
+            ExpressiveDialogTitle(
+                icon = Icons.Filled.Person,
+                iconColor = MapsBlue,
+                title = "Datos del paciente",
+            )
+        },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -717,12 +811,16 @@ fun PatientDataDialog(
             }
         },
         confirmButton = {
-            Button(onClick = {
-                onConfirm(
-                    name.ifBlank { null }, hc.ifBlank { null }, group, allergies.ifBlank { null },
-                    address.ifBlank { null }, dx.ifBlank { null }, outOfService, sex,
-                )
-            }) { Text("Guardar") }
+            Button(
+                onClick = {
+                    onConfirm(
+                        name.ifBlank { null }, hc.ifBlank { null }, group,
+                        allergies.ifBlank { null },
+                        address.ifBlank { null }, dx.ifBlank { null }, outOfService, sex,
+                    )
+                },
+                colors = mapsPrimaryColors(),
+            ) { Text("Guardar") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
     )
@@ -739,7 +837,14 @@ fun CustomFieldDialog(
     var value by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        shape = DialogShape28,
+        title = {
+            ExpressiveDialogTitle(
+                icon = Icons.Filled.Add,
+                iconColor = MapsBlue,
+                title = title,
+            )
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
@@ -756,6 +861,7 @@ fun CustomFieldDialog(
             Button(
                 onClick = { onConfirm(label, value) },
                 enabled = label.isNotBlank(),
+                colors = mapsPrimaryColors(),
             ) { Text("Añadir") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
@@ -778,10 +884,18 @@ fun PendingsSheet(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                TintedCircleIcon(
+                    icon = Icons.Filled.HourglassEmpty,
+                    iconColor = MapsBlue,
+                    circleSize = 44.dp,
+                    iconSize = 22.dp,
+                )
+                Spacer(Modifier.width(12.dp))
                 Text(
                     "Pendientes — Cama ${row.card.bed}",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
+                    color = TextPrimary,
                     modifier = Modifier.weight(1f),
                 )
                 IconButton(onClick = { showAdd = true }) {
@@ -806,7 +920,7 @@ fun PendingsSheet(
                             )
                         }
                         TextButton(onClick = { onCompletePending(pending.id) }) {
-                            Text("Hecho ✓")
+                            Text("Hecho ✓", color = MapsBlue)
                         }
                     }
                     HorizontalDivider()

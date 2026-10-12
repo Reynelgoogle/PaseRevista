@@ -7,11 +7,20 @@
     android:padding="8dp"
     android:gravity="center_vertical">
 
+    <!-- Punto de color por estado (lo pinta el servicio). -->
+    <TextView
+        android:id="@+id/widget_item_dot"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="●"
+        android:textSize="10sp"
+        android:layout_marginEnd="6dp" />
+
     <TextView
         android:id="@+id/widget_item_bed"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textColor="#FFFFFF"
+        android:textColor="#111827"
         android:textStyle="bold"
         android:textSize="13sp" />
 
@@ -21,7 +30,7 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:layout_marginStart="8dp"
-        android:textColor="#E6FFFFFF"
+        android:textColor="#4B5563"
         android:textSize="13sp"
         android:singleLine="true"
         android:ellipsize="end" />
@@ -30,7 +39,6 @@
         android:id="@+id/widget_item_tag"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textColor="#00B4D8"
         android:textStyle="bold"
         android:textSize="11sp" />
 </LinearLayout>

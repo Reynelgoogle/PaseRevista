@@ -14,12 +14,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -46,6 +48,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.reynelbusto.paserevista.core.IsoDate
 import com.reynelbusto.paserevista.domain.model.BoardColumn
+import com.reynelbusto.paserevista.presentation.components.TintedCircleIcon
+import com.reynelbusto.paserevista.presentation.theme.MapsBlue
+import com.reynelbusto.paserevista.presentation.theme.TextPrimary
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -261,12 +266,21 @@ fun BoardCalendarView(
                     .padding(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    dayTitle(sheetKey),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TintedCircleIcon(
+                        icon = Icons.Filled.CalendarMonth,
+                        iconColor = MapsBlue,
+                        circleSize = 44.dp,
+                        iconSize = 22.dp,
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        dayTitle(sheetKey),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary,
+                    )
+                }
                 if (dayItems.isEmpty()) {
                     Text(
                         "Sin procedimientos este día.",

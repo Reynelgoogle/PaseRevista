@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.IconButton
@@ -48,6 +50,9 @@ import com.reynelbusto.paserevista.PaseRevistaApp
 import com.reynelbusto.paserevista.domain.model.PatientState
 import com.reynelbusto.paserevista.domain.usecase.CaseCardPatch
 import com.reynelbusto.paserevista.domain.usecase.DEFAULT_SERVICE_ID
+import com.reynelbusto.paserevista.presentation.components.TintedCircleIcon
+import com.reynelbusto.paserevista.presentation.components.mapsPrimaryColors
+import com.reynelbusto.paserevista.presentation.theme.MapsBlue
 import com.reynelbusto.paserevista.presentation.theme.PaseRevistaTheme
 import java.util.Locale
 import kotlinx.coroutines.flow.first
@@ -193,16 +198,24 @@ private fun QuickAddScreen(
             modifier = Modifier
                 .padding(24.dp)
                 .fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(28.dp),
         ) {
             Column(
                 modifier = Modifier.padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    TintedCircleIcon(
+                        icon = Icons.Filled.Add,
+                        iconColor = MapsBlue,
+                        circleSize = 44.dp,
+                        iconSize = 22.dp,
+                    )
+                    Spacer(Modifier.width(12.dp))
                     Text(
                         text = "Nueva tarjeta",
                         style = MaterialTheme.typography.titleLarge,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                         modifier = Modifier.weight(1f),
                     )
                     TextButton(onClick = onClose) { Text("✕") }
@@ -240,7 +253,10 @@ private fun QuickAddScreen(
                 ) {
                     TextButton(onClick = onClose) { Text("Cancelar") }
                     Spacer(Modifier.width(8.dp))
-                    Button(onClick = { onSave(bed, diagnosis, procedure) }) {
+                    Button(
+                        onClick = { onSave(bed, diagnosis, procedure) },
+                        colors = mapsPrimaryColors(),
+                    ) {
                         Text("Guardar")
                     }
                 }

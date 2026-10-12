@@ -106,9 +106,12 @@ private class QuickViewsFactory(private val context: Context) :
                 R.id.quick_item_tag,
                 if (row.ready) "LISTO" else "PENDIENTE",
             )
+            // Punto de color por estado (identidad fija, sobre fondo claro).
+            val stateColor = if (row.ready) "#2E7D32" else "#D32F2F"
+            setTextColor(R.id.quick_item_dot, Color.parseColor(stateColor))
             setTextColor(
                 R.id.quick_item_tag,
-                if (row.ready) Color.parseColor("#A5D6A7") else Color.parseColor("#FF8A80"),
+                Color.parseColor(stateColor),
             )
             // Check ⇒ alternar Listo; cuerpo ⇒ abrir detalle rápido.
             setOnClickFillInIntent(

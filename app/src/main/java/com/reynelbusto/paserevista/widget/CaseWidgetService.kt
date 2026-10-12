@@ -2,6 +2,7 @@ package com.reynelbusto.paserevista.widget
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import com.reynelbusto.paserevista.PaseRevistaApp
@@ -84,6 +85,10 @@ private class CaseViewsFactory(private val context: Context) : RemoteViewsServic
                 R.id.widget_item_tag,
                 if (row.ready) "LISTO" else "PENDIENTE",
             )
+            // Punto de color por estado (identidad fija, sobre fondo claro).
+            val stateColor = if (row.ready) "#2E7D32" else "#D32F2F"
+            setTextColor(R.id.widget_item_dot, Color.parseColor(stateColor))
+            setTextColor(R.id.widget_item_tag, Color.parseColor(stateColor))
             // Tap ⇒ plantilla (abrir app).
             setOnClickFillInIntent(R.id.widget_item_root, Intent())
         }

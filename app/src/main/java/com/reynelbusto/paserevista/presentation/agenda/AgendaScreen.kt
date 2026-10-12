@@ -5,17 +5,21 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -54,7 +58,13 @@ import com.reynelbusto.paserevista.domain.usecase.ShareFormatter
 import com.reynelbusto.paserevista.presentation.camas.AddBedDialog
 import com.reynelbusto.paserevista.presentation.camas.CardRow
 import com.reynelbusto.paserevista.presentation.components.CaseCardView
+import com.reynelbusto.paserevista.presentation.components.DialogShape28
 import com.reynelbusto.paserevista.presentation.components.EmptyState
+import com.reynelbusto.paserevista.presentation.components.ExpressiveDialogTitle
+import com.reynelbusto.paserevista.presentation.components.TintedCircleIcon
+import com.reynelbusto.paserevista.presentation.components.mapsPrimaryColors
+import com.reynelbusto.paserevista.presentation.theme.ClinicalWatch
+import com.reynelbusto.paserevista.presentation.theme.MapsBlue
 import com.reynelbusto.paserevista.presentation.theme.TextSecondary
 import kotlinx.coroutines.launch
 
@@ -273,7 +283,14 @@ fun AgendaScreen(container: AppContainer) {
     if (confirm != null) {
         AlertDialog(
             onDismissRequest = { vm.dismissDischargeConfirm() },
-            title = { Text("Alta con pendientes P1") },
+            shape = DialogShape28,
+            title = {
+                ExpressiveDialogTitle(
+                    icon = Icons.Filled.Warning,
+                    iconColor = ClinicalWatch,
+                    title = "Alta con pendientes P1",
+                )
+            },
             text = {
                 Column {
                     Text(
@@ -286,7 +303,10 @@ fun AgendaScreen(container: AppContainer) {
                 }
             },
             confirmButton = {
-                Button(onClick = { vm.confirmDischarge() }) {
+                Button(
+                    onClick = { vm.confirmDischarge() },
+                    colors = mapsPrimaryColors(),
+                ) {
                     Text("Dar alta igual")
                 }
             },
@@ -383,6 +403,13 @@ private fun DayHeader(
             .fillMaxWidth()
             .padding(top = 4.dp),
     ) {
+        TintedCircleIcon(
+            icon = Icons.Filled.DateRange,
+            iconColor = MapsBlue,
+            circleSize = 40.dp,
+            iconSize = 22.dp,
+        )
+        Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 section.title,

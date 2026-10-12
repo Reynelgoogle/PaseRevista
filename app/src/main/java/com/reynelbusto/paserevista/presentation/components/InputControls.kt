@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.DateRange
@@ -38,6 +39,7 @@ import com.reynelbusto.paserevista.core.isoDateFromPickerMillis
 import com.reynelbusto.paserevista.core.pickerMillisFromIso
 import com.reynelbusto.paserevista.domain.model.ClinicalOptions
 import com.reynelbusto.paserevista.domain.model.Sex
+import com.reynelbusto.paserevista.presentation.theme.MapsBlue
 import com.reynelbusto.paserevista.presentation.theme.TextSecondary
 
 /**
@@ -183,11 +185,12 @@ fun DatePickerField(
         val pickerState = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
         DatePickerDialog(
             onDismissRequest = { show = false },
+            shape = RoundedCornerShape(28.dp),
             confirmButton = {
                 TextButton(onClick = {
                     onSelect(pickerState.selectedDateMillis?.let(::isoDateFromPickerMillis))
                     show = false
-                }) { Text("Aceptar") }
+                }) { Text("Aceptar", color = MapsBlue) }
             },
             dismissButton = {
                 TextButton(onClick = { show = false }) { Text("Cancelar") }

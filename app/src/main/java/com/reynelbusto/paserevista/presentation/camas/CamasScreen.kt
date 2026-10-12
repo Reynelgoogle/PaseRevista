@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -43,7 +44,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.reynelbusto.paserevista.di.AppContainer
 import com.reynelbusto.paserevista.domain.model.displayDescription
 import com.reynelbusto.paserevista.presentation.components.CaseCardView
+import com.reynelbusto.paserevista.presentation.components.DialogShape28
 import com.reynelbusto.paserevista.presentation.components.EmptyState
+import com.reynelbusto.paserevista.presentation.components.ExpressiveDialogTitle
+import com.reynelbusto.paserevista.presentation.components.mapsPrimaryColors
+import com.reynelbusto.paserevista.presentation.theme.ClinicalWatch
+import com.reynelbusto.paserevista.presentation.theme.MapsBlue
 import com.reynelbusto.paserevista.presentation.theme.TextSecondary
 
 /**
@@ -106,7 +112,11 @@ fun CamasScreen(
         },
         snackbarHost = { SnackbarHost(snackbar) },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAddBed = true }) {
+            FloatingActionButton(
+                onClick = { showAddBed = true },
+                containerColor = MapsBlue,
+                contentColor = androidx.compose.ui.graphics.Color.White,
+            ) {
                 Icon(Icons.Filled.Add, contentDescription = "Añadir cama")
             }
         },
@@ -196,7 +206,14 @@ fun CamasScreen(
     if (confirm != null) {
         AlertDialog(
             onDismissRequest = { vm.dismissDischargeConfirm() },
-            title = { Text("Alta con pendientes P1") },
+            shape = DialogShape28,
+            title = {
+                ExpressiveDialogTitle(
+                    icon = Icons.Filled.Warning,
+                    iconColor = ClinicalWatch,
+                    title = "Alta con pendientes P1",
+                )
+            },
             text = {
                 Column {
                     Text(
@@ -209,7 +226,10 @@ fun CamasScreen(
                 }
             },
             confirmButton = {
-                Button(onClick = { vm.confirmDischarge() }) {
+                Button(
+                    onClick = { vm.confirmDischarge() },
+                    colors = mapsPrimaryColors(),
+                ) {
                     Text("Dar alta igual")
                 }
             },
@@ -228,7 +248,14 @@ fun AddBedDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
     var bed by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Añadir cama") },
+        shape = DialogShape28,
+        title = {
+            ExpressiveDialogTitle(
+                icon = Icons.Filled.Add,
+                iconColor = MapsBlue,
+                title = "Añadir cama",
+            )
+        },
         text = {
             OutlinedTextField(
                 value = bed,
@@ -242,6 +269,7 @@ fun AddBedDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
             Button(
                 onClick = { onConfirm(bed) },
                 enabled = bed.isNotBlank(),
+                colors = mapsPrimaryColors(),
             ) { Text("Añadir") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },

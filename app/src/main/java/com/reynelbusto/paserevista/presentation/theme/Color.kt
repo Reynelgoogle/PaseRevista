@@ -8,6 +8,10 @@ val PaseRevistaTurquoise = Color(0xFF00B4D8) // Turquesa (acentos, nunca texto c
 val PaseRevistaLightBlue = Color(0xFFE6F7FB) // Azul claro (fondos suaves)
 val PaseRevistaBackground = Color(0xFFF5F7FA) // Gris fondo
 
+// Identidad fija estilo Maps: azul siempre igual en toda la app,
+// no sigue los colores dinámicos del sistema.
+val MapsBlue = Color(0xFF1A73E8)
+
 // Estados clínicos: pocos colores, siempre el mismo significado.
 val ClinicalStable = Color(0xFF10B981) // Verde — Estable
 val ClinicalWatch = Color(0xFFF59E0B) // Ámbar — Vigilancia (solo acentos/gráficos)

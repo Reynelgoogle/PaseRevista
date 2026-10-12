@@ -16,8 +16,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -42,13 +49,23 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.reynelbusto.paserevista.BuildConfig
 import com.reynelbusto.paserevista.data.backup.BackupManager
 import com.reynelbusto.paserevista.data.backup.BackupPolicy
 import com.reynelbusto.paserevista.di.AppContainer
+import com.reynelbusto.paserevista.presentation.components.DialogShape28
+import com.reynelbusto.paserevista.presentation.components.ExpressiveDialogTitle
+import com.reynelbusto.paserevista.presentation.components.TintedCircleIcon
+import com.reynelbusto.paserevista.presentation.components.mapsPrimaryColors
+import com.reynelbusto.paserevista.presentation.theme.ClinicalStable
+import com.reynelbusto.paserevista.presentation.theme.ClinicalWatch
+import com.reynelbusto.paserevista.presentation.theme.MapsBlue
 import com.reynelbusto.paserevista.presentation.theme.TextSecondary
 import java.time.Instant
 import java.time.LocalDateTime
@@ -164,7 +181,11 @@ fun MoreScreen(container: AppContainer) {
                 .verticalScroll(rememberScrollState())
                 .fillMaxWidth(),
         ) {
-            Text("Acerca de", style = MaterialTheme.typography.titleMedium)
+            SectionHeader(
+                icon = Icons.Filled.Info,
+                iconColor = MapsBlue,
+                title = "Acerca de",
+            )
             Text(
                 text = "Entrega de guardia (nombre provisional) v${BuildConfig.VERSION_NAME} · " +
                     "100% offline. Los datos nunca salen del dispositivo.",
@@ -173,7 +194,11 @@ fun MoreScreen(container: AppContainer) {
             )
 
             Spacer(Modifier.height(24.dp))
-            Text("Respaldo local", style = MaterialTheme.typography.titleMedium)
+            SectionHeader(
+                icon = Icons.Filled.Refresh,
+                iconColor = MapsBlue,
+                title = "Respaldo local",
+            )
             Text(
                 text = "Copias de la base de datos en Documents/EntregaGuardia/. " +
                     "Sobreviven a actualizaciones y desinstalaciones.",
@@ -186,6 +211,7 @@ fun MoreScreen(container: AppContainer) {
                 onClick = ::createBackup,
                 enabled = !working,
                 modifier = Modifier.fillMaxWidth(),
+                colors = mapsPrimaryColors(),
             ) {
                 if (working) CircularProgressIndicator() else Text("Crear respaldo ahora")
             }
@@ -213,9 +239,15 @@ fun MoreScreen(container: AppContainer) {
             Spacer(Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                TintedCircleIcon(
+                    icon = Icons.Filled.Refresh,
+                    iconColor = MapsBlue,
+                    circleSize = 36.dp,
+                    iconSize = 20.dp,
+                )
+                Spacer(Modifier.width(10.dp))
                 Text(
                     "Respaldo automático diario",
                     style = MaterialTheme.typography.bodyMedium,
@@ -255,7 +287,11 @@ fun MoreScreen(container: AppContainer) {
 
             if (BuildConfig.SEED_ENABLED) {
                 Spacer(Modifier.height(24.dp))
-                Text("Desarrollo", style = MaterialTheme.typography.titleMedium)
+                SectionHeader(
+                    icon = Icons.Filled.Build,
+                    iconColor = ClinicalWatch,
+                    title = "Desarrollo",
+                )
                 Spacer(Modifier.height(8.dp))
                 Button(
                     onClick = {
@@ -283,7 +319,14 @@ fun MoreScreen(container: AppContainer) {
     pendingRestore?.let { entry ->
         AlertDialog(
             onDismissRequest = { pendingRestore = null },
-            title = { Text("Restaurar respaldo") },
+            shape = DialogShape28,
+            title = {
+                ExpressiveDialogTitle(
+                    icon = Icons.Filled.Refresh,
+                    iconColor = MapsBlue,
+                    title = "Restaurar respaldo",
+                )
+            },
             text = {
                 Text(
                     "Se reemplazarán los datos actuales por el respaldo " +
@@ -306,11 +349,29 @@ fun MoreScreen(container: AppContainer) {
                             }
                         }
                     },
-                ) { Text("Restaurar") }
+                ) { Text("Restaurar", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { pendingRestore = null }) { Text("Cancelar") }
             },
+        )
+    }
+}
+
+@Composable
+private fun SectionHeader(icon: ImageVector, iconColor: Color, title: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        TintedCircleIcon(
+            icon = icon,
+            iconColor = iconColor,
+            circleSize = 36.dp,
+            iconSize = 20.dp,
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
         )
     }
 }
@@ -337,17 +398,27 @@ private fun BackupRow(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
         ),
     ) {
-        Column(Modifier.padding(12.dp)) {
-            Text(dateLabel, style = MaterialTheme.typography.bodyMedium)
-            Text(
-                BackupPolicy.formatSize(entry.sizeBytes),
-                style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary,
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TintedCircleIcon(
+                icon = if (entry.isAutomatic) Icons.Filled.CheckCircle else Icons.Filled.Refresh,
+                iconColor = if (entry.isAutomatic) ClinicalStable else MapsBlue,
             )
-            Spacer(Modifier.height(4.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onShare) { Text("Compartir") }
-                OutlinedButton(onClick = onRestore) { Text("Restaurar") }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(dateLabel, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    BackupPolicy.formatSize(entry.sizeBytes),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary,
+                )
+                Spacer(Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onShare) { Text("Compartir") }
+                    OutlinedButton(onClick = onRestore) { Text("Restaurar") }
+                }
             }
         }
     }

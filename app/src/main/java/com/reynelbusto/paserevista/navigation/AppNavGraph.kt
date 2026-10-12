@@ -9,11 +9,13 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -26,18 +28,24 @@ import com.reynelbusto.paserevista.presentation.agenda.AgendaScreen
 import com.reynelbusto.paserevista.presentation.board.BoardScreen
 import com.reynelbusto.paserevista.presentation.camas.CamasScreen
 import com.reynelbusto.paserevista.presentation.more.MoreScreen
+import com.reynelbusto.paserevista.presentation.theme.ClinicalStable
+import com.reynelbusto.paserevista.presentation.theme.MapsBlue
+import com.reynelbusto.paserevista.presentation.theme.PaseRevistaPrimary
+import com.reynelbusto.paserevista.presentation.theme.TextSecondary
 
 private data class BottomDestination(
     val route: String,
     val label: String,
     val icon: ImageVector,
+    /** Color de identidad fija del destino (mockup). */
+    val color: Color,
 )
 
 private val BOTTOM_DESTINATIONS = listOf(
-    BottomDestination(Routes.CAMAS, "Camas", Icons.Filled.Home),
-    BottomDestination(Routes.AGENDA, "Agenda", Icons.Filled.Edit),
-    BottomDestination(Routes.BOARD, "Pizarra", Icons.Filled.DateRange),
-    BottomDestination(Routes.MORE, "Más", Icons.Filled.MoreVert),
+    BottomDestination(Routes.CAMAS, "Camas", Icons.Filled.Home, PaseRevistaPrimary),
+    BottomDestination(Routes.AGENDA, "Agenda", Icons.Filled.Edit, ClinicalStable),
+    BottomDestination(Routes.BOARD, "Pizarra", Icons.Filled.DateRange, MapsBlue),
+    BottomDestination(Routes.MORE, "Más", Icons.Filled.MoreVert, TextSecondary),
 )
 
 /** Navegación principal: 4 destinos con barra inferior Material 3. */
@@ -68,6 +76,10 @@ fun AppNavGraph(
                         },
                         icon = { Icon(dest.icon, contentDescription = dest.label) },
                         label = { Text(dest.label) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = dest.color,
+                            selectedTextColor = dest.color,
+                        ),
                     )
                 }
             }

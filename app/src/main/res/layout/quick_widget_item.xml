@@ -6,6 +6,15 @@
     android:gravity="center_vertical"
     android:padding="10dp">
 
+    <!-- Punto de color por estado (lo pinta el servicio). -->
+    <TextView
+        android:id="@+id/quick_item_dot"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="●"
+        android:textSize="10sp"
+        android:layout_marginEnd="2dp" />
+
     <!-- Check de un toque: alterna Pendiente/Listo sin abrir la app. -->
     <TextView
         android:id="@+id/quick_item_check"
@@ -13,7 +22,7 @@
         android:layout_height="36dp"
         android:gravity="center"
         android:textSize="20sp"
-        android:textColor="#00B4D8"
+        android:textColor="#1A73E8"
         android:text="○" />
 
     <!-- Cuerpo: toque ⇒ detalle rápido. -->
@@ -29,7 +38,7 @@
             android:id="@+id/quick_item_title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="#FFFFFF"
+            android:textColor="#111827"
             android:textStyle="bold"
             android:textSize="14sp"
             android:singleLine="true"
@@ -39,7 +48,7 @@
             android:id="@+id/quick_item_sub"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="#B3FFFFFF"
+            android:textColor="#4B5563"
             android:textSize="12sp"
             android:singleLine="true" />
     </LinearLayout>

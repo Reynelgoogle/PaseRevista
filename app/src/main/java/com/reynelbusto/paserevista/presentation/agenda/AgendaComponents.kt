@@ -10,16 +10,23 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -39,9 +46,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.reynelbusto.paserevista.presentation.camas.CardRow
+import com.reynelbusto.paserevista.presentation.components.DialogShape28
+import com.reynelbusto.paserevista.presentation.components.ExpressiveDialogTitle
+import com.reynelbusto.paserevista.presentation.components.TintedCircleIcon
+import com.reynelbusto.paserevista.presentation.components.mapsPrimaryColors
 import com.reynelbusto.paserevista.presentation.theme.ClinicalCritical
 import com.reynelbusto.paserevista.presentation.theme.ClinicalStable
 import com.reynelbusto.paserevista.presentation.theme.ClinicalWatch
+import com.reynelbusto.paserevista.presentation.theme.MapsBlue
 import com.reynelbusto.paserevista.presentation.theme.PaseRevistaPrimary
 import com.reynelbusto.paserevista.presentation.theme.TextPrimary
 import com.reynelbusto.paserevista.presentation.theme.TextSecondary
@@ -75,6 +87,10 @@ fun DateStrip(
                     )
                 },
                 leadingIcon = null,
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MapsBlue,
+                    selectedLabelColor = Color.White,
+                ),
             )
         }
     }
@@ -170,61 +186,76 @@ fun AgendaBedRow(
     modifier: Modifier = Modifier,
 ) {
     val accent = if (row.card.ready) ClinicalStable else ClinicalCritical
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onExpand)
-            .padding(vertical = 7.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
-        Box(
-            modifier = Modifier.size(24.dp),
-            contentAlignment = Alignment.Center,
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onExpand),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
+            // Franja de color a la izquierda, como en la pizarra.
             Box(
                 modifier = Modifier
-                    .size(10.dp)
-                    .clip(CircleShape)
+                    .width(6.dp)
+                    .height(56.dp)
                     .background(accent),
             )
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "CAMA ${row.card.bed}",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
-                )
-                if (!row.card.diagnosis.isNullOrBlank()) {
+            Spacer(Modifier.width(10.dp))
+            TintedCircleIcon(
+                icon = Icons.Filled.Person,
+                iconColor = accent,
+                circleSize = 36.dp,
+                iconSize = 20.dp,
+            )
+            Spacer(Modifier.width(10.dp))
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(vertical = 8.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        " · ${row.card.diagnosis}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        "CAMA ${row.card.bed}",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary,
                     )
+                    if (!row.card.diagnosis.isNullOrBlank()) {
+                        Text(
+                            " · ${row.card.diagnosis}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (row.openPendings.isNotEmpty()) {
+                        Text(
+                            "⚠ ${row.openPendings.size} pendiente" +
+                                if (row.openPendings.size == 1) "" else "s",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = ClinicalCritical,
+                        )
+                    }
+                    if (originMark != null) {
+                        Text(
+                            (if (row.openPendings.isNotEmpty()) " · " else "") + originMark,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontStyle = FontStyle.Italic,
+                            color = TextSecondary,
+                        )
+                    }
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (row.openPendings.isNotEmpty()) {
-                    Text(
-                        "⚠ ${row.openPendings.size} pendiente" +
-                            if (row.openPendings.size == 1) "" else "s",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = ClinicalCritical,
-                    )
-                }
-                if (originMark != null) {
-                    Text(
-                        (if (row.openPendings.isNotEmpty()) " · " else "") + originMark,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontStyle = FontStyle.Italic,
-                        color = TextSecondary,
-                    )
-                }
-            }
+            Spacer(Modifier.width(8.dp))
         }
     }
 }
@@ -249,7 +280,7 @@ fun DayNoteRow(
             Icon(
                 Icons.Filled.Edit,
                 contentDescription = null,
-                tint = TextSecondary,
+                tint = MapsBlue,
                 modifier = Modifier.size(14.dp),
             )
             Spacer(Modifier.width(6.dp))
@@ -282,7 +313,14 @@ fun NoteEditDialog(
     var text by remember { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Nota del día") },
+        shape = DialogShape28,
+        title = {
+            ExpressiveDialogTitle(
+                icon = Icons.Filled.Edit,
+                iconColor = MapsBlue,
+                title = "Nota del día",
+            )
+        },
         text = {
             OutlinedTextField(
                 value = text,
@@ -292,7 +330,10 @@ fun NoteEditDialog(
             )
         },
         confirmButton = {
-            TextButton(onClick = { onSave(text) }) { Text("Guardar") }
+            Button(
+                onClick = { onSave(text) },
+                colors = mapsPrimaryColors(),
+            ) { Text("Guardar") }
         },
         dismissButton = {
             Row {

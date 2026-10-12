@@ -8,6 +8,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
@@ -32,6 +38,7 @@ import com.reynelbusto.paserevista.domain.model.DeviceKind
 import com.reynelbusto.paserevista.domain.model.Patient
 import com.reynelbusto.paserevista.domain.model.PendingType
 import com.reynelbusto.paserevista.domain.model.ResultType
+import com.reynelbusto.paserevista.presentation.theme.MapsBlue
 import com.reynelbusto.paserevista.presentation.theme.TextSecondary
 import androidx.compose.material3.MaterialTheme
 
@@ -136,7 +143,14 @@ fun AddPendingDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Nuevo pendiente") },
+        shape = DialogShape28,
+        title = {
+            ExpressiveDialogTitle(
+                icon = Icons.Filled.HourglassEmpty,
+                iconColor = MapsBlue,
+                title = "Nuevo pendiente",
+            )
+        },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -200,6 +214,7 @@ fun AddPendingDialog(
                     )
                 },
                 enabled = valid,
+                colors = mapsPrimaryColors(),
             ) { Text("Crear") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
@@ -224,7 +239,14 @@ fun AddTreatmentDialog(onDismiss: () -> Unit, onConfirm: (TreatmentFormData) -> 
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Nuevo tratamiento") },
+        shape = DialogShape28,
+        title = {
+            ExpressiveDialogTitle(
+                icon = Icons.Filled.Add,
+                iconColor = MapsBlue,
+                title = "Nuevo tratamiento",
+            )
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(value = drug, onValueChange = { drug = it }, label = { Text("Medicamento *") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
@@ -237,6 +259,7 @@ fun AddTreatmentDialog(onDismiss: () -> Unit, onConfirm: (TreatmentFormData) -> 
             Button(
                 onClick = { onConfirm(TreatmentFormData(drug.trim(), dose.trim(), route.trim(), frequency.trim())) },
                 enabled = valid,
+                colors = mapsPrimaryColors(),
             ) { Text("Iniciar") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
@@ -261,7 +284,14 @@ fun AddDeviceDialog(onDismiss: () -> Unit, onConfirm: (DeviceFormData) -> Unit) 
     )
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Nuevo dispositivo") },
+        shape = DialogShape28,
+        title = {
+            ExpressiveDialogTitle(
+                icon = Icons.Filled.Build,
+                iconColor = MapsBlue,
+                title = "Nuevo dispositivo",
+            )
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -282,7 +312,10 @@ fun AddDeviceDialog(onDismiss: () -> Unit, onConfirm: (DeviceFormData) -> Unit) 
             }
         },
         confirmButton = {
-            Button(onClick = { onConfirm(DeviceFormData(kind, label.ifBlank { null })) }) { Text("Registrar") }
+            Button(
+                onClick = { onConfirm(DeviceFormData(kind, label.ifBlank { null })) },
+                colors = mapsPrimaryColors(),
+            ) { Text("Registrar") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
     )
@@ -312,7 +345,14 @@ fun AddResultDialog(
     val valid = summary.isNotBlank() && resultDate.isNotBlank()
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Nuevo resultado") },
+        shape = DialogShape28,
+        title = {
+            ExpressiveDialogTitle(
+                icon = Icons.Filled.List,
+                iconColor = MapsBlue,
+                title = "Nuevo resultado",
+            )
+        },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -344,6 +384,7 @@ fun AddResultDialog(
                     onConfirm(ResultFormData(type, resultDate.trim(), summary.trim(), detail.ifBlank { null }))
                 },
                 enabled = valid,
+                colors = mapsPrimaryColors(),
             ) { Text("Registrar") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
@@ -378,7 +419,14 @@ fun AddProcedureDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Agendar procedimiento") },
+        shape = DialogShape28,
+        title = {
+            ExpressiveDialogTitle(
+                icon = Icons.Filled.CalendarMonth,
+                iconColor = MapsBlue,
+                title = "Agendar procedimiento",
+            )
+        },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()).heightIn(max = 420.dp),
@@ -407,6 +455,7 @@ fun AddProcedureDialog(
                     )
                 },
                 enabled = valid,
+                colors = mapsPrimaryColors(),
             ) { Text("Agendar") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },

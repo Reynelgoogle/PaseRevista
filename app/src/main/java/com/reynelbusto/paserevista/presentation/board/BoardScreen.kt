@@ -85,6 +85,7 @@ import com.reynelbusto.paserevista.presentation.components.AddProcedureDialog
 import com.reynelbusto.paserevista.presentation.components.EmptyState
 import com.reynelbusto.paserevista.presentation.theme.ClinicalStable
 import com.reynelbusto.paserevista.presentation.theme.ClinicalWatch
+import com.reynelbusto.paserevista.presentation.theme.MapsBlue
 import com.reynelbusto.paserevista.presentation.theme.PaseRevistaPrimary
 import com.reynelbusto.paserevista.presentation.theme.TextPrimary
 import com.reynelbusto.paserevista.presentation.theme.TextSecondary
@@ -97,9 +98,6 @@ import com.reynelbusto.paserevista.presentation.theme.TextSecondary
  * estado con conteos, hoja inferior con el resumen del día y FAB para
  * agendar. El azul Maps es fijo (no sigue los colores del sistema).
  */
-internal val MapsBlue = Color(0xFF1A73E8)
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BoardScreen(container: AppContainer) {
     val vm: BoardViewModel = viewModel(factory = BoardViewModel.Factory(container))

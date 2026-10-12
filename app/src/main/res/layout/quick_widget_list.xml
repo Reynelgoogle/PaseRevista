@@ -3,8 +3,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#0B5E7A"
-    android:padding="8dp">
+    android:background="@drawable/widget_bg"
+    android:padding="12dp">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -17,7 +17,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:textColor="#FFFFFF"
+            android:textColor="#1A73E8"
             android:textStyle="bold"
             android:textSize="15sp" />
 
@@ -26,6 +26,7 @@
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:src="@android:drawable/ic_btn_speak_now"
+            android:tint="#1A73E8"
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="Dictar tarjeta" />
 
@@ -34,6 +35,7 @@
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:src="@android:drawable/ic_input_add"
+            android:tint="#1A73E8"
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="Añadir tarjeta" />
     </LinearLayout>
@@ -43,7 +45,7 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:divider="#33FFFFFF"
+        android:divider="#E5E7EB"
         android:dividerHeight="1dp" />
 
     <TextView
@@ -52,7 +54,7 @@
         android:layout_height="0dp"
         android:layout_weight="1"
         android:gravity="center"
-        android:textColor="#CCFFFFFF"
+        android:textColor="#6B7280"
         android:textSize="13sp"
         android:text="Sin camas hoy — toca ＋ para añadir" />
 </LinearLayout>
